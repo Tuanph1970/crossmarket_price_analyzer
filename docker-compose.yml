@@ -1,0 +1,197 @@
+version: '3.9'
+
+services:
+  # ─── Infrastructure ─────────────────────────────────────────────────────────
+  mysql:
+    image: mysql:8.0
+    container_name: cma-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: cma_products
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: cma-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: cma-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── API Services ──────────────────────────────────────────────────────────
+  product-api:
+    build:
+      context: ./src/Services/ProductService/ProductService.Api
+      dockerfile: Dockerfile
+    container_name: cma-product-api
+    ports:
+      - "5001:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Server=mysql;Port=3306;Database=cma_products;User=root;Password=rootpassword;
+      - Redis__ConnectionString=redis:6379
+      - RabbitMq__Host=rabbitmq
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  matching-api:
+    build:
+      context: ./src/Services/MatchingService/MatchingService.Api
+      dockerfile: Dockerfile
+    container_name: cma-matching-api
+    ports:
+      - "5002:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Server=mysql;Port=3306;Database=cma_matching;User=root;Password=rootpassword;
+      - RabbitMq__Host=rabbitmq
+    depends_on:
+      mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  scoring-api:
+    build:
+      context: ./src/Services/ScoringService/ScoringService.Api
+      dockerfile: Dockerfile
+    container_name: cma-scoring-api
+    ports:
+      - "5003:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Server=mysql;Port=3306;Database=cma_scoring;User=root;Password=rootpassword;
+      - RabbitMq__Host=rabbitmq
+    depends_on:
+      mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  notification-api:
+    build:
+      context: ./src/Services/NotificationService/NotificationService.Api
+      dockerfile: Dockerfile
+    container_name: cma-notification-api
+    ports:
+      - "5004:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Server=mysql;Port=3306;Database=cma_notifications;User=root;Password=rootpassword;
+      - RabbitMq__Host=rabbitmq
+    depends_on:
+      mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  scraping-worker:
+    build:
+      context: ./src/Services/ScrapingService/ScrapingService.Worker
+      dockerfile: Dockerfile
+    container_name: cma-scraping-worker
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Server=mysql;Port=3306;Database=cma_scraping;User=root;Password=rootpassword;
+      - Redis__ConnectionString=redis:6379
+      - RabbitMq__Host=rabbitmq
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  # ─── Gateway & Frontend ────────────────────────────────────────────────────
+  gateway:
+    build:
+      context: ./src/Apps/CMA.Gateway
+      dockerfile: Dockerfile
+    container_name: cma-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+    depends_on:
+      - product-api
+      - matching-api
+      - scoring-api
+      - notification-api
+
+  frontend:
+    build:
+      context: ./src/Apps/CMA.WebApp
+      dockerfile: Dockerfile
+    container_name: cma-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - gateway
+
+  # ─── Observability (Optional) ───────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: cma-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+    profiles:
+      - observability
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: cma-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+    profiles:
+      - observability
+
+volumes:
+  mysql_data:
+  redis_data:
+  rabbitmq_data:
+  grafana_data:

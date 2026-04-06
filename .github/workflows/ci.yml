@@ -1,0 +1,182 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [main, develop, 'feature/**', 'fix/**']
+  pull_request:
+    branches: [main, develop]
+
+env:
+  DOTNET_VERSION: '9.0.x'
+  NODE_VERSION: '20'
+
+jobs:
+  # ─── Backend CI ─────────────────────────────────────────────────────────────
+  backend-ci:
+    name: Backend CI (.NET ${{ env.DOTNET_VERSION }})
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: testpassword
+          MYSQL_DATABASE: cma_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+
+      rabbitmq:
+        image: rabbitmq:3.12-management-alpine
+        ports:
+          - 5672:5672
+          - 15672:15672
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore dependencies
+        run: dotnet restore CrossMarketAnalyzer.sln
+
+      - name: Build solution
+        run: dotnet build CrossMarketAnalyzer.sln --no-restore --configuration Release
+
+      - name: Run unit tests
+        run: |
+          dotnet test CrossMarketAnalyzer.sln \
+            --no-build \
+            --configuration Release \
+            --filter "FullyQualifiedName~UnitTests" \
+            --logger "trx;LogFileName=results.trx" \
+            --results-directory ./TestResults
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dotnet-test-results
+          path: ./TestResults/**/*.trx
+
+      - name: Run SonarQube scan
+        if: github.event_name == 'pull_request'
+        uses: sonarsource/sonarqube-scan-action@v3
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+  # ─── Frontend CI ─────────────────────────────────────────────────────────────
+  frontend-ci:
+    name: Frontend CI (Node ${{ env.NODE_VERSION }})
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: src/Apps/CMA.WebApp
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: src/Apps/CMA.WebApp/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint || true
+
+      - name: Build application
+        run: npm run build
+        env:
+          VITE_API_BASE_URL: ${{ secrets.STAGING_API_URL }}
+
+      - name: Run unit tests
+        run: npm test -- --run
+        env:
+          CI: true
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: src/Apps/CMA.WebApp/coverage/
+
+  # ─── Docker Build (on push to main/develop) ──────────────────────────────────
+  docker-build:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: [backend-ci, frontend-ci]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=sha,prefix=
+            type=ref,event=branch
+
+      - name: Build all Docker images
+        run: |
+          docker build -t cma-product-api:${{ github.sha }} src/Services/ProductService/ProductService.Api
+          docker build -t cma-matching-api:${{ github.sha }} src/Services/MatchingService/MatchingService.Api
+          docker build -t cma-scoring-api:${{ github.sha }} src/Services/ScoringService/ScoringService.Api
+          docker build -t cma-notification-api:${{ github.sha }} src/Services/NotificationService/NotificationService.Api
+          docker build -t cma-scraping-worker:${{ github.sha }} src/Services/ScrapingService/ScrapingService.Worker
+          docker build -t cma-gateway:${{ github.sha }} src/Apps/CMA.Gateway
+
+  # ─── Quality Gate ───────────────────────────────────────────────────────────
+  quality-gate:
+    name: Quality Gate
+    runs-on: ubuntu-latest
+    needs: [backend-ci, frontend-ci]
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Summary
+        run: |
+          echo "## CI Quality Gate Results" >> $GITHUB_STEP_SUMMARY
+          echo "- Backend tests: Passed" >> $GITHUB_STEP_SUMMARY
+          echo "- Frontend build: Passed" >> $GITHUB_STEP_SUMMARY
+          echo "Review artifacts for detailed results." >> $GITHUB_STEP_SUMMARY

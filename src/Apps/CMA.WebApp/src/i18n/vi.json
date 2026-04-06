@@ -1,0 +1,21 @@
+{
+  "nav": {
+    "dashboard": "Bảng điều khiển", "compare": "So sánh", "categories": "Danh mục",
+    "history": "Lịch sử giá", "quickLookup": "Tra cứu nhanh",
+    "alerts": "Thông báo", "settings": "Cài đặt"
+  },
+  "dashboard": {
+    "title": "Bảng điều khiển cơ hội",
+    "totalOpportunities": "Tổng cơ hội",
+    "avgMargin": "Biên lợi nhuận TB", "avgDemand": "Nhu cầu TB",
+    "highOpportunities": "Cơ hội cao",
+    "noResults": "Không tìm thấy cơ hội phù hợp.",
+    "loadMore": "Tải thêm"
+  },
+  "common": {
+    "loading": "Đang tải...", "error": "Đã xảy ra lỗi",
+    "retry": "Thử lại", "export": "Xuất", "save": "Lưu",
+    "cancel": "Hủy", "confirm": "Xác nhận", "reject": "Từ chối",
+    "search": "Tìm sản phẩm..."
+  }
+}
