@@ -1,4 +1,5 @@
 using Quartz;
+using ScrapingService.Worker.Jobs;
 
 namespace ScrapingService.Worker;
 
@@ -7,7 +8,7 @@ public static class JobsConfiguration
     public static IServiceCollectionQuartzConfigurator AddQuartzJobs(
         this IServiceCollectionQuartzConfigurator quartz)
     {
-        // ExchangeRateUpdateJob — runs hourly
+        // ExchangeRateUpdateJob — runs every hour at minute 0
         quartz.AddJob<ExchangeRateUpdateJob>(j => j.WithIdentity("ExchangeRateUpdateJob"));
         quartz.AddTrigger(t => t
             .ForJob("ExchangeRateUpdateJob")
@@ -35,31 +36,13 @@ public static class JobsConfiguration
             .WithIdentity("ScoringJob-trigger")
             .WithCronSchedule("0 0 */6 * * ?"));
 
+        // CostRecalcJob — runs every 6 hours (offset by 15 minutes from ScoringJob)
+        quartz.AddJob<CostRecalcJob>(j => j.WithIdentity("CostRecalcJob"));
+        quartz.AddTrigger(t => t
+            .ForJob("CostRecalcJob")
+            .WithIdentity("CostRecalcJob-trigger")
+            .WithCronSchedule("0 15 */6 * * ?"));
+
         return quartz;
     }
-}
-
-// Stub job implementations — Phase 1 will implement actual scraping
-public class ExchangeRateUpdateJob : IJob
-{
-    public async Task Execute(IJobExecutionContext context) =>
-        await Console.Out.WriteLineAsync($"[{DateTime.UtcNow}] ExchangeRateUpdateJob ran.");
-}
-
-public class UsProductScrapingJob : IJob
-{
-    public async Task Execute(IJobExecutionContext context) =>
-        await Console.Out.WriteLineAsync($"[{DateTime.UtcNow}] UsProductScrapingJob ran.");
-}
-
-public class VnProductScrapingJob : IJob
-{
-    public async Task Execute(IJobExecutionContext context) =>
-        await Console.Out.WriteLineAsync($"[{DateTime.UtcNow}] VnProductScrapingJob ran.");
-}
-
-public class ScoringJob : IJob
-{
-    public async Task Execute(IJobExecutionContext context) =>
-        await Console.Out.WriteLineAsync($"[{DateTime.UtcNow}] ScoringJob ran.");
 }

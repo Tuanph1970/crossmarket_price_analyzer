@@ -3,7 +3,8 @@ import api from './axiosClient';
 export const matchingApi = {
   getMatches: (params) => api.get('/matches', { params }),
   getMatch: (id) => api.get(`/matches/${id}`),
-  confirmMatch: (id) => api.post(`/matches/${id}/confirm`),
-  rejectMatch: (id) => api.post(`/matches/${id}/reject`),
-  batchReview: (ids, action) => api.post('/matches/batch-review', { ids, action }),
+  createMatch: (data) => api.post('/matches', data),
+  confirmMatch: (id, data) => api.post(`/matches/${id}/confirm`, data),
+  rejectMatch: (id, data) => api.post(`/matches/${id}/reject`, data),
+  batchReview: (data, userId) => api.post('/matches/batch-review', data, { params: { userId } }),
 };

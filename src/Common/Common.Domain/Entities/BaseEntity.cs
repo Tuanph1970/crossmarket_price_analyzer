@@ -6,7 +6,7 @@ namespace Common.Domain.Entities;
 /// <typeparam name="TId">The type of the entity's primary key.</typeparam>
 public abstract class BaseEntity<TId> where TId : notnull
 {
-    public TId Id { get; protected set; } = default!;
+    public TId Id { get; protected internal set; } = default!;
 
     public override bool Equals(object? obj)
     {
