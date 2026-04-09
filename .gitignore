@@ -52,3 +52,14 @@ CodeCoverage/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
+
+# Node.js / npm
+node_modules/
+package-lock.json
+
+# Vite / React build output
+*.local
+dist/
+.env
+.env.*
+!.env.example
