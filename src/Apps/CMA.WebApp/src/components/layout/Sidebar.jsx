@@ -6,7 +6,7 @@ import { useUiStore } from '@/store/uiStore';
 
 const navItems = [
   { to: '/',          icon: LayoutDashboard, labelKey: 'nav.dashboard' },
-  { to: '/compare',   icon: GitCompare,     labelKey: 'nav.compare' },
+  { to: '/compare',   icon: GitCompare,     labelKey: 'nav.compare' }, // matchId supplied via URL param
   { to: '/categories', icon: FolderOpen,     labelKey: 'nav.categories' },
   { to: '/history',   icon: LineChart,     labelKey: 'nav.history' },
   { to: '/quick-lookup', icon: Search,      labelKey: 'nav.quickLookup' },

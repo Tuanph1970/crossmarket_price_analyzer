@@ -1,9 +1,11 @@
-import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useParams, Link } from 'react-router-dom';
 import PageContainer from '@/components/layout/PageContainer';
 import { Card } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
 import { useScoreBreakdown } from '@/hooks/useScores';
 import { useMatch } from '@/hooks/useMatches';
+import { useScores } from '@/hooks/useScores';
 
 function ScoreFactorRow({ label, raw, weight, normalized, weighted }) {
   const pct = Math.round(normalized ?? 0);
@@ -21,80 +23,149 @@ function ScoreFactorRow({ label, raw, weight, normalized, weighted }) {
   );
 }
 
+const FACTOR_LABELS = {
+  ProfitMargin: 'profitMargin',
+  Demand: 'demand',
+  Competition: 'competition',
+  Stability: 'stability',
+  Confidence: 'confidence',
+};
+
 export default function ComparisonPage() {
   const { t } = useTranslation();
-  const [matchId, setMatchId] = useState('');
+  const { matchId } = useParams();
   const { data: breakdown } = useScoreBreakdown(matchId);
+  const { data: match } = useMatch(matchId);
+  const { data: scoresData } = useScores({ pageSize: 100 });
+
+  const getLabel = (key) => {
+    const i18nKey = FACTOR_LABELS[key] ?? key.toLowerCase();
+    return t(`comparison.${i18nKey}`, i18nKey);
+  };
 
   return (
     <PageContainer>
       <h1 className="text-2xl font-bold text-text-primary mb-6">{t('comparison.title')}</h1>
 
-      <div className="max-w-xl mb-6 flex gap-3">
-        <input
-          className="flex-1 border border-border rounded-lg px-4 py-2 bg-bg-primary text-text-primary"
-          placeholder="Enter match ID to compare..."
-          value={matchId}
-          onChange={(e) => setMatchId(e.target.value)}
-        />
-      </div>
+      {matchId ? (
+        breakdown ? (
+          <div className="grid md:grid-cols-2 gap-6">
+            {/* Composite Score Card */}
+            <Card className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-lg font-semibold">{t('comparison.compositeScore')}</h2>
+                <span className="text-3xl font-bold text-primary">
+                  {breakdown.compositeScore?.toFixed(1) ?? '—'}
+                </span>
+              </div>
+              <div className="space-y-1">
+                {(breakdown.factors ?? []).map((f) => (
+                  <ScoreFactorRow
+                    key={f.factorKey ?? f.name}
+                    label={getLabel(f.factorKey ?? f.name)}
+                    raw={f.rawScore}
+                    weight={f.weight}
+                    normalized={f.normalizedScore ?? f.normalized}
+                    weighted={f.weightedScore ?? f.weighted}
+                  />
+                ))}
+              </div>
+            </Card>
 
-      {breakdown ? (
-        <div className="grid md:grid-cols-2 gap-6">
-          <Card className="p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-semibold">Composite Score</h2>
-              <span className="text-3xl font-bold text-primary">
-                {breakdown.compositeScore?.toFixed(1) ?? '—'}
-              </span>
-            </div>
-            <div className="space-y-1">
-              {(breakdown.factors ?? []).map((f) => (
-                <ScoreFactorRow key={f.name} {...f} />
-              ))}
-            </div>
-          </Card>
+            {/* Landed Cost Breakdown Card */}
+            <Card className="p-6">
+              <h2 className="text-lg font-semibold mb-4">{t('comparison.landedCost')}</h2>
+              <div className="space-y-2 text-sm">
+                {breakdown.costBreakdown ? (
+                  <>
+                    <div className="flex justify-between">
+                      <span className="text-text-muted">{t('comparison.usPurchase')}</span>
+                      <span>{breakdown.costBreakdown.usPurchasePriceVnd?.toLocaleString('vi-VN')} VND</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-text-muted">{t('comparison.cif')}</span>
+                      <span>{breakdown.costBreakdown.cifVnd?.toLocaleString('vi-VN')} VND</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-text-muted">{t('comparison.importDuty')}</span>
+                      <span>{breakdown.costBreakdown.importDutyVnd?.toLocaleString('vi-VN')} VND</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-text-muted">{t('comparison.vat')}</span>
+                      <span>{breakdown.costBreakdown.vatVnd?.toLocaleString('vi-VN')} VND</span>
+                    </div>
+                    <div className="flex justify-between font-bold border-t pt-2 mt-2">
+                      <span>{t('comparison.totalLanded')}</span>
+                      <span>{breakdown.costBreakdown.totalLandedCostVnd?.toLocaleString('vi-VN')} VND</span>
+                    </div>
+                  </>
+                ) : (
+                  /* Show landed cost derived from score-level fields */
+                  <>
+                    <div className="flex justify-between">
+                      <span className="text-text-muted">{t('comparison.totalLanded')}</span>
+                      <span>{Number(breakdown.landedCostVnd ?? 0).toLocaleString('vi-VN')} VND</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-text-muted">{t('comparison.profitMargin', 'Margin')}</span>
+                      <span>{breakdown.profitMarginPct?.toFixed(1) ?? '—'}%</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-text-muted">{t('comparison.retailPrice', 'Retail Price')}</span>
+                      <span>{Number(breakdown.vietnamRetailVnd ?? 0).toLocaleString('vi-VN')} VND</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-text-muted">Price Difference</span>
+                      <span>{Number(breakdown.priceDifferenceVnd ?? 0).toLocaleString('vi-VN')} VND</span>
+                    </div>
+                  </>
+                )}
+              </div>
+            </Card>
 
-          <Card className="p-6">
-            <h2 className="text-lg font-semibold mb-4">Landed Cost Breakdown</h2>
-            <div className="space-y-2 text-sm">
-              {breakdown.landedCost ? (
-                <>
-                  <div className="flex justify-between">
-                    <span className="text-text-muted">US Purchase</span>
-                    <span>{breakdown.landedCost.usPurchasePriceUsd?.toLocaleString()} USD</span>
+            {/* Match Info */}
+            {match && (
+              <Card className="p-6 md:col-span-2">
+                <h2 className="text-lg font-semibold mb-3">Match Details</h2>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div>
+                    <span className="text-text-muted">Status:</span>{' '}
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                      match.status === 'Confirmed' ? 'bg-green-100 text-green-800' :
+                      match.status === 'Rejected' ? 'bg-red-100 text-red-800' :
+                      'bg-yellow-100 text-yellow-800'
+                    }`}>{match.status}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-text-muted">Exchange Rate</span>
-                    <span>{breakdown.landedCost.exchangeRate}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-text-muted">CIF</span>
-                    <span>{breakdown.landedCost.cifVnd?.toLocaleString()} VND</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-text-muted">Import Duty (5%)</span>
-                    <span>{breakdown.landedCost.importDutyVnd?.toLocaleString()} VND</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-text-muted">VAT (10%)</span>
-                    <span>{breakdown.landedCost.vatVnd?.toLocaleString()} VND</span>
-                  </div>
-                  <div className="flex justify-between font-bold border-t pt-2 mt-2">
-                    <span>Total Landed Cost</span>
-                    <span>{breakdown.landedCost.totalCostVnd?.toLocaleString()} VND</span>
-                  </div>
-                </>
-              ) : (
-                <p className="text-text-muted">No landed cost data.</p>
-              )}
-            </div>
-          </Card>
-        </div>
-      ) : matchId ? (
-        <p className="text-text-muted">No score data found for this match.</p>
+                  <div><span className="text-text-muted">Confidence:</span> {match.confidenceLevel ?? '—'}</div>
+                  <div><span className="text-text-muted">Match Score:</span> {match.confidenceScore?.toFixed(1) ?? '—'}</div>
+                  <div><span className="text-text-muted">Created:</span> {match.createdAt ? new Date(match.createdAt).toLocaleDateString() : '—'}</div>
+                </div>
+              </Card>
+            )}
+          </div>
+        ) : (
+          <p className="text-text-muted">{t('comparison.noData')}</p>
+        )
       ) : (
-        <p className="text-text-muted">Enter a match ID above to view the score breakdown.</p>
+        <div className="text-center py-16 space-y-4">
+          <p className="text-text-muted text-lg">{t('comparison.enterPrompt')}</p>
+          {scoresData?.items?.length > 0 && (
+            <div className="max-w-md mx-auto space-y-2">
+              <p className="text-sm text-text-muted">Recent matches:</p>
+              <div className="space-y-1">
+                {(scoresData.items.slice(0, 5) || []).map((score) => (
+                  <Link
+                    key={score.matchId}
+                    to={`/compare/${score.matchId}`}
+                    className="block p-2 border border-border rounded hover:bg-bg-secondary text-sm text-text-primary transition-colors"
+                  >
+                    Match #{score.matchId?.slice(0, 8)} — Score: {score.compositeScore?.toFixed(1) ?? '—'}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       )}
     </PageContainer>
   );

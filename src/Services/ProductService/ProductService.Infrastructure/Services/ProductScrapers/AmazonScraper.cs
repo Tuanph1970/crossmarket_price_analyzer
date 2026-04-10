@@ -4,8 +4,11 @@ using Common.Domain.Scraping;
 using Microsoft.Extensions.Logging;
 using Microsoft.Playwright;
 
-namespace ScrapingService.Infrastructure.Scrapers;
+namespace ProductService.Infrastructure.Services.ProductScrapers;
 
+/// <summary>
+/// Amazon product scraper using Playwright.
+/// </summary>
 public class AmazonScraper : IProductScraper
 {
     private readonly ILogger<AmazonScraper> _logger;
@@ -13,36 +16,42 @@ public class AmazonScraper : IProductScraper
 
     public AmazonScraper(ILogger<AmazonScraper> logger) { _logger = logger; }
 
-    public bool CanHandle(string url) => url.Contains("amazon.com", StringComparison.OrdinalIgnoreCase);
+    public bool CanHandle(string url) =>
+        url.Contains("amazon.com", StringComparison.OrdinalIgnoreCase);
 
     public async Task<ScrapedProduct?> ScrapeAsync(string url, CancellationToken ct = default)
     {
         try
         {
-            var pw = await Microsoft.Playwright.Playwright.CreateAsync();
+            using var pw = await Playwright.CreateAsync();
             var browser = await pw.Chromium.LaunchAsync(new() { Headless = true });
             var page = await browser.NewPageAsync();
             await page.GotoAsync(url, new() { WaitUntil = WaitUntilState.NetworkIdle });
             await Task.Delay(2000, ct);
 
-            var nameEl = await page.QuerySelectorAsync("#productTitle");
-            var name = nameEl != null ? await nameEl.TextContentAsync() ?? "" : "";
+            var nameEl  = await page.QuerySelectorAsync("#productTitle");
             var priceEl = await page.QuerySelectorAsync(".a-offscreen");
-            var priceText = priceEl != null ? await priceEl.TextContentAsync() ?? "" : "";
             var brandEl = await page.QuerySelectorAsync("#bylineInfo");
+            var asinEl  = await page.QuerySelectorAsync("[data-asin]");
+
+            var name  = nameEl  != null ? await nameEl.TextContentAsync() ?? "" : "";
+            var priceText = priceEl != null ? await priceEl.TextContentAsync() ?? "" : "";
             var brand = brandEl != null ? await brandEl.TextContentAsync() ?? "" : "";
-            var asinEl = await page.QuerySelectorAsync("[data-asin]");
-            var asin = asinEl != null ? await asinEl.GetAttributeAsync("data-asin") ?? "" : "";
+            var asin  = asinEl  != null ? await asinEl.GetAttributeAsync("data-asin") ?? "" : "";
             await browser.CloseAsync();
 
             decimal price = 0;
             var clean = Regex.Replace(priceText, "[^0-9.]", "");
             decimal.TryParse(clean, out price);
-            var cleanBrand = brand.Replace("Brand: ", "").Replace("Visit the ", "").Replace(" Store", "").Trim();
+            var cleanBrand = brand
+                .Replace("Brand: ", "")
+                .Replace("Visit the ", "")
+                .Replace(" Store", "")
+                .Trim();
 
             if (string.IsNullOrWhiteSpace(name) || price == 0)
             {
-                _logger.LogWarning("Amazon incomplete {Url}", url);
+                _logger.LogWarning("Amazon scrape incomplete for {Url}", url);
                 return null;
             }
 
@@ -52,7 +61,7 @@ public class AmazonScraper : IProductScraper
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Amazon scrape failed {Url}", url);
+            _logger.LogError(ex, "Amazon scrape failed for {Url}", url);
             return null;
         }
     }
@@ -65,7 +74,7 @@ public class AmazonScraper : IProductScraper
             if (urls.Count >= count) break;
             try
             {
-                var pw = await Microsoft.Playwright.Playwright.CreateAsync();
+                using var pw = await Playwright.CreateAsync();
                 var browser = await pw.Chromium.LaunchAsync(new() { Headless = true });
                 var page = await browser.NewPageAsync();
                 await page.GotoAsync($"https://www.amazon.com/s?k={s}",

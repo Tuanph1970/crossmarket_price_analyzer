@@ -12,9 +12,48 @@
     "noResults": "Không tìm thấy cơ hội phù hợp.",
     "loadMore": "Tải thêm"
   },
+  "quickLookup": {
+    "title": "Tra cứu nhanh",
+    "placeholder": "Dán URL sản phẩm (Amazon, Walmart, cigarpage.com, Shopee)...",
+    "analyze": "Phân tích",
+    "analyzing": "Đang phân tích...",
+    "error": "Không thể phân tích URL",
+    "scrapedProduct": "Sản phẩm đã lấy",
+    "vnMatches": "Sản phẩm Việt Nam khớp",
+    "scores": "Điểm cơ hội",
+    "exchangeRate": "Tỷ giá",
+    "noMatches": "Không tìm thấy sản phẩm Việt Nam khớp với ngưỡng điểm.",
+    "viewComparison": "Xem so sánh đầy đủ",
+    "productNotFound": "Không thể trích xuất thông tin sản phẩm từ URL này.",
+    "matchScore": "Điểm khớp",
+    "retailPrice": "Giá bán lẻ",
+    "confidence": "Độ tin cậy"
+  },
+  "comparison": {
+    "title": "So sánh cơ hội",
+    "enterId": "Nhập ID so khớp để so sánh...",
+    "compositeScore": "Điểm tổng hợp",
+    "landedCost": "Chi phí đã tính landa",
+    "usPurchase": "Giá mua từ Mỹ",
+    "exchangeRate": "Tỷ giá",
+    "cif": "CIF",
+    "importDuty": "Thuế nhập khẩu (5%)",
+    "vat": "VAT (10%)",
+    "totalLanded": "Tổng chi phí landa",
+    "profitMargin": "Biên lợi nhuận",
+    "demand": "Nhu cầu",
+    "competition": "Cạnh tranh",
+    "stability": "Ổn định",
+    "confidence": "Độ tin cậy",
+    "noData": "Không tìm thấy dữ liệu điểm cho so khớp này.",
+    "enterPrompt": "Nhập ID so khớp ở trên để xem chi tiết điểm."
+  },
+  "settings": {
+    "title": "Cài đặt"
+  },
   "common": {
     "loading": "Đang tải...", "error": "Đã xảy ra lỗi",
-    "retry": "Thử lại", "export": "Xuất", "save": "Lưu",
+    "retry": "Thử lại", "export": "Xuất CSV", "save": "Lưu",
     "cancel": "Hủy", "confirm": "Xác nhận", "reject": "Từ chối",
     "search": "Tìm sản phẩm..."
   }

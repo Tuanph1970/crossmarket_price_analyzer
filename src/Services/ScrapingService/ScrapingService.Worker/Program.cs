@@ -1,3 +1,4 @@
+using Common.Domain.Scraping;
 using Common.Infrastructure.Configuration;
 using Quartz;
 using ScrapingService.Infrastructure.Scrapers;

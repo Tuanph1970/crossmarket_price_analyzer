@@ -20,6 +20,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Services\ScoringService\ScoringService.Domain\ScoringService.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Services\ScoringService\ScoringService.Application\ScoringService.Application.csproj" />
+    <ProjectReference Include="..\..\src\Common\Common.Domain\Common.Domain.csproj" />
   </ItemGroup>
 
 </Project>

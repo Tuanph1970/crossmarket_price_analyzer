@@ -12,9 +12,48 @@
     "noResults": "No opportunities found matching your filters.",
     "loadMore": "Load More"
   },
+  "quickLookup": {
+    "title": "Quick Lookup",
+    "placeholder": "Paste a product URL (Amazon, Walmart, cigarpage.com, Shopee)...",
+    "analyze": "Analyze",
+    "analyzing": "Analyzing...",
+    "error": "Failed to analyze URL",
+    "scrapedProduct": "Scraped Product",
+    "vnMatches": "Vietnam Matches",
+    "scores": "Opportunity Scores",
+    "exchangeRate": "Exchange Rate",
+    "noMatches": "No Vietnam matches found above the score threshold.",
+    "viewComparison": "View Full Comparison",
+    "productNotFound": "Could not extract product details from this URL.",
+    "matchScore": "Match Score",
+    "retailPrice": "Retail Price",
+    "confidence": "Confidence"
+  },
+  "comparison": {
+    "title": "Opportunity Comparison",
+    "enterId": "Enter match ID to compare...",
+    "compositeScore": "Composite Score",
+    "landedCost": "Landed Cost Breakdown",
+    "usPurchase": "US Purchase",
+    "exchangeRate": "Exchange Rate",
+    "cif": "CIF",
+    "importDuty": "Import Duty (5%)",
+    "vat": "VAT (10%)",
+    "totalLanded": "Total Landed Cost",
+    "profitMargin": "Profit Margin",
+    "demand": "Demand",
+    "competition": "Competition",
+    "stability": "Stability",
+    "confidence": "Confidence",
+    "noData": "No score data found for this match.",
+    "enterPrompt": "Enter a match ID above to view the score breakdown."
+  },
+  "settings": {
+    "title": "Settings"
+  },
   "common": {
     "loading": "Loading...", "error": "An error occurred",
-    "retry": "Retry", "export": "Export", "save": "Save",
+    "retry": "Retry", "export": "Export CSV", "save": "Save",
     "cancel": "Cancel", "confirm": "Confirm", "reject": "Reject",
     "search": "Search products..."
   }

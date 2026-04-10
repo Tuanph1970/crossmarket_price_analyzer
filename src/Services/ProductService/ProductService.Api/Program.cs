@@ -1,4 +1,6 @@
 using Common.Application.Extensions;
+using Common.Application.Interfaces;
+using Common.Domain.Scraping;
 using Common.Infrastructure.Configuration;
 using Microsoft.EntityFrameworkCore;
 using ProductService.Application.Commands;
@@ -6,6 +8,8 @@ using ProductService.Application.DTOs;
 using ProductService.Application.Services;
 using ProductService.Contracts.Persistence;
 using ProductService.Infrastructure.Persistence;
+using ProductService.Infrastructure.Services;
+using ProductService.Infrastructure.Services.ProductScrapers;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -33,8 +37,25 @@ builder.Services.AddDbContext<ProductDbContext>(options =>
 // 4b. Register IProductDbContext alias
 builder.Services.AddScoped<IProductDbContext>(sp => sp.GetRequiredService<ProductDbContext>());
 
-// 5. Register application services
+// 5. HTTP clients
+builder.Services.AddHttpClient("ExchangeRate")
+    .ConfigureHttpClient(c => c.Timeout = TimeSpan.FromSeconds(30));
+
+// 6. Register scrapers (IProductScraper implementations)
+builder.Services.AddSingleton<IProductScraper, AmazonScraper>();
+builder.Services.AddSingleton<IProductScraper, WalmartScraper>();
+builder.Services.AddSingleton<IProductScraper, CigarPageScraper>();
+
+// 7. Register infrastructure services
+builder.Services.AddScoped<ScraperFactory>();
+builder.Services.AddScoped<IExchangeRateService, ExchangeRateService>();
+
+// 8. Register application services
 builder.Services.AddScoped<IProductService, ProductServiceImpl>();
+
+// 9. MediatR — register QuickLookupCommand handler
+builder.Services.AddMediatR(cfg =>
+    cfg.RegisterServicesFromAssemblyContaining<ProductServiceImpl>());
 
 var app = builder.Build();
 
@@ -123,6 +144,18 @@ app.MapPost("/api/products/upsert-from-scrape", async (
     return Results.Ok(result);
 });
 
+// POST /api/products/quick-lookup — URL → scrape → match → score
+app.MapPost("/api/products/quick-lookup", async (
+    MediatR.IMediator mediator,
+    QuickLookupRequest req,
+    CancellationToken ct) =>
+{
+    var result = await mediator.Send(
+        new QuickLookupCommand(req.Url, req.VnNameFilter, req.MaxVnMatches, req.MinMatchScore),
+        ct);
+    return Results.Ok(result);
+});
+
 // Health check
 app.MapGet("/health", () => Results.Ok(new { Status = "Healthy", Service = "ProductService", Timestamp = DateTime.UtcNow }));
 
@@ -163,4 +196,12 @@ public record UpsertProductRequest(
     Common.Domain.Enums.ProductSource Source,
     string? HsCode = null,
     string? CategoryName = null
+);
+
+// Request DTO for POST /api/products/quick-lookup
+public record QuickLookupRequest(
+    string Url,
+    string? VnNameFilter = null,
+    int MaxVnMatches = 5,
+    decimal MinMatchScore = 40m
 );

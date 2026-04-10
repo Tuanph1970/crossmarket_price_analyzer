@@ -10,10 +10,18 @@ export default defineConfig({
     },
   },
   server: {
-    port: 3000,
+    port: 3004,
     proxy: {
-      '/api': {
-        target: 'http://localhost:8080',
+      '/api/products': {
+        target: 'http://product-api:8080',
+        changeOrigin: true,
+      },
+      '/api/scores': {
+        target: 'http://scoring-api:8080',
+        changeOrigin: true,
+      },
+      '/api/matches': {
+        target: 'http://matching-api:8080',
         changeOrigin: true,
       },
     },

@@ -18,6 +18,8 @@
     <ProjectReference Include="..\ProductService.Domain\ProductService.Domain.csproj" />
     <ProjectReference Include="..\ProductService.Contracts\ProductService.Contracts.csproj" />
     <ProjectReference Include="..\..\..\Common\Common.Infrastructure\Common.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\MatchingService\MatchingService.Application\MatchingService.Application.csproj" />
+    <ProjectReference Include="..\..\ScoringService\ScoringService.Application\ScoringService.Application.csproj" />
   </ItemGroup>
 
 </Project>

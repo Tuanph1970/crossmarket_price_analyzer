@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MatchingService.Domain\MatchingService.Domain.csproj" />
+    <ProjectReference Include="..\..\..\Common\Common.Application\Common.Application.csproj" />
     <ProjectReference Include="..\..\..\Common\Common.Infrastructure\Common.Infrastructure.csproj" />
   </ItemGroup>
 

@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Common.Domain.Enums;
+using Common.Domain.Scraping;
 using Microsoft.Extensions.Logging;
 using Microsoft.Playwright;
 

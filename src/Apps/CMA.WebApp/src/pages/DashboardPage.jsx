@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { MetricCard } from '@/components/ui/MetricCard';
+import { Link } from 'react-router-dom';
+import { Download } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
 import { useDashboardMetrics } from '@/hooks/useOpportunities';
 import { useScores } from '@/hooks/useScores';
 import { useFilterStore } from '@/store/filterStore';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
+import { MetricCard } from '@/components/ui/MetricCard';
 
 export default function DashboardPage() {
   const { t } = useTranslation();
@@ -57,6 +59,28 @@ export default function DashboardPage() {
           ]}
         />
         <Button variant="outline" onClick={() => filters.resetFilters()}>Reset Filters</Button>
+        <Button
+          variant="outline"
+          onClick={() => {
+            const rows = [
+              ['MatchId', 'CompositeScore', 'ProfitMargin%', 'Demand', 'Competition', 'Stability', 'Confidence', 'LandedCostVND', 'RetailVND'],
+              ...items.map(s => [
+                s.matchId ?? '', s.compositeScore ?? 0, s.profitMarginPct ?? 0,
+                s.demandScore ?? 0, s.competitionScore ?? 0, s.priceStabilityScore ?? 0,
+                s.matchConfidenceScore ?? 0, s.landedCostVnd ?? 0, s.vietnamRetailVnd ?? 0,
+              ]),
+            ];
+            const csv = rows.map(r => r.join(',')).join('\n');
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url;
+            a.download = `opportunities-${new Date().toISOString().slice(0, 10)}.csv`;
+            a.click(); URL.revokeObjectURL(url);
+          }}
+        >
+          <Download className="w-4 h-4 mr-1.5 inline" />
+          {t('common.export', 'Export CSV')}
+        </Button>
       </div>
 
       {/* Opportunity Cards */}

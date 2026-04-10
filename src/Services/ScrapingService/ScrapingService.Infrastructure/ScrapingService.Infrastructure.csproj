@@ -6,6 +6,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\ScrapingService.Domain\ScrapingService.Domain.csproj" />
+    <ProjectReference Include="..\..\..\Common\Common.Domain\Common.Domain.csproj" />
     <ProjectReference Include="..\..\..\Common\Common.Infrastructure\Common.Infrastructure.csproj" />
   </ItemGroup>
   <ItemGroup>

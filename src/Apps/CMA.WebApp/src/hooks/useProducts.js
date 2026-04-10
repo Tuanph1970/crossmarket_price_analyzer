@@ -6,6 +6,7 @@ export const PRODUCT_KEYS = {
   list: (params) => ['products', 'list', params],
   detail: (id) => ['products', 'detail', id],
   priceHistory: (id) => ['products', 'prices', id],
+  quickLookup: (url) => ['products', 'quickLookup', url],
 };
 
 export function useProducts(params = {}, options = {}) {
@@ -38,6 +39,17 @@ export function useUpsertFromScrape(options = {}) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data) => productApi.upsertFromScrape(data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: PRODUCT_KEYS.all });
+    },
+    ...options,
+  });
+}
+
+export function useQuickLookup(options = {}) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data) => productApi.quickLookup(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: PRODUCT_KEYS.all });
     },
