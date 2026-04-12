@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData } from '@tanstack/react-query';
 import { productApi } from '@/api/productApi';
 
 export const PRODUCT_KEYS = {
@@ -13,6 +14,7 @@ export function useProducts(params = {}, options = {}) {
   return useQuery({
     queryKey: PRODUCT_KEYS.list(params),
     queryFn: () => productApi.getProducts(params).then(r => r.data),
+    placeholderData: keepPreviousData,
     ...options,
   });
 }
@@ -31,6 +33,7 @@ export function usePriceHistory(id, params = {}, options = {}) {
     queryKey: PRODUCT_KEYS.priceHistory(id),
     queryFn: () => productApi.getPriceHistory(id, params).then(r => r.data),
     enabled: !!id,
+    placeholderData: keepPreviousData,
     ...options,
   });
 }

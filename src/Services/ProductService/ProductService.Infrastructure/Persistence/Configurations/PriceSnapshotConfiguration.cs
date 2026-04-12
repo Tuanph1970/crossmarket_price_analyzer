@@ -25,5 +25,7 @@ public class PriceSnapshotConfiguration : IEntityTypeConfiguration<PriceSnapshot
 
         builder.HasOne(ps => ps.Product).WithMany(p => p.PriceSnapshots).HasForeignKey(ps => ps.ProductId).OnDelete(DeleteBehavior.Cascade);
         builder.HasIndex(ps => new { ps.ProductId, ps.ScrapedAt }).IsDescending(false, true).HasDatabaseName("idx_product_time");
+        // P2-B04: index on ProductId alone for direct lookups
+        builder.HasIndex(ps => ps.ProductId).HasDatabaseName("idx_product_id");
     }
 }

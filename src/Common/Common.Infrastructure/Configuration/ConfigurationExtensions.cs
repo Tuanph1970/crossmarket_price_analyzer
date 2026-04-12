@@ -2,6 +2,7 @@ using Common.Application.Interfaces;
 using Common.Infrastructure.Caching;
 using Common.Infrastructure.Logging;
 using Common.Infrastructure.Messaging;
+using Common.Infrastructure.Messaging.Outbox;
 using Common.Infrastructure.Persistence;
 using Common.Infrastructure.Telemetry;
 using MassTransit;
@@ -61,6 +62,10 @@ public static class ConfigurationExtensions
             });
 
             services.AddScoped<IEventPublisher, RabbitMqEventPublisher>();
+
+            // Outbox pattern: repository + background processor
+            services.AddScoped<IOutboxRepository, OutboxRepository>();
+            services.AddHostedService<OutboxProcessor>();
         }
 
         // OpenTelemetry

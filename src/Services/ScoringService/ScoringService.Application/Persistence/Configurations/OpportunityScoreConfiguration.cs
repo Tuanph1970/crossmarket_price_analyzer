@@ -29,5 +29,12 @@ public class OpportunityScoreConfiguration : IEntityTypeConfiguration<Opportunit
 
         builder.HasIndex(p => p.MatchId).IsUnique().HasDatabaseName("uk_match_id");
         builder.HasIndex(p => p.CompositeScore).HasDatabaseName("idx_composite_desc").IsDescending(false);
+        // P2-B04: missing production indexes
+        builder.HasIndex(p => p.CalculatedAt).HasDatabaseName("idx_calculated_at");
+        builder.HasIndex(p => new { p.CompositeScore, p.CalculatedAt })
+            .IsDescending(false, true)
+            .HasDatabaseName("idx_composite_calculated");
+        builder.HasIndex(p => new { p.MatchId, p.ProfitMarginPct })
+            .HasDatabaseName("idx_match_margin");
     }
 }

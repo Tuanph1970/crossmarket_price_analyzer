@@ -1,10 +1,13 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
+import { SearchX } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { EmptyState } from '@/components/shared/EmptyState';
+import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
 import { useQuickLookup } from '@/hooks/useProducts';
 import { CONFIDENCE_COLORS } from '@/lib/constants';
 
@@ -93,6 +96,7 @@ export default function QuickLookupPage() {
   };
 
   return (
+    <ErrorBoundary>
     <PageContainer>
       <h1 className="text-2xl font-bold text-text-primary mb-6">
         {t('quickLookup.title', 'Quick Lookup')}
@@ -220,13 +224,25 @@ export default function QuickLookupPage() {
           {/* No matches fallback */}
           {(result.vnMatches ?? []).length === 0 && result.scrapedProduct && (
             <Card className="p-6">
-              <p className="text-text-muted text-sm">
-                {t('quickLookup.noMatches', 'No Vietnam matches found above the score threshold.')}
-              </p>
+              <EmptyState
+                icon={SearchX}
+                title={t('quickLookup.noResults', 'No results found.')}
+                description={t('quickLookup.results.noMatches', 'No Vietnam matches found above the score threshold.')}
+              />
             </Card>
           )}
         </div>
       )}
+
+      {/* Empty state — no input yet */}
+      {!result && !lookupMutation.isPending && (
+        <EmptyState
+          icon={SearchX}
+          title={t('quickLookup.title', 'Quick Lookup')}
+          description={t('quickLookup.placeholder', 'Paste a product URL to analyze it.')}
+        />
+      )}
     </PageContainer>
+    </ErrorBoundary>
   );
 }

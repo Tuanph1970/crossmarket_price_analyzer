@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData } from '@tanstack/react-query';
 import { scoringApi } from '@/api/scoringApi';
 import { matchingApi } from '@/api/matchingApi';
 import api from '@/api/axiosClient';
@@ -18,6 +19,7 @@ export function useOpportunities(params = {}, options = {}) {
       ]);
       return { scores: scoresRes.data, matches: matchesRes.data };
     },
+    placeholderData: keepPreviousData,
     ...options,
   });
 }

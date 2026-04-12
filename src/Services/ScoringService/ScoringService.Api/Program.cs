@@ -1,5 +1,6 @@
 using Common.Application.Extensions;
 using Common.Infrastructure.Configuration;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ScoringService.Application.Commands;
 using ScoringService.Application.DTOs;
@@ -14,7 +15,14 @@ builder.Host.UseCommonLogging();
 builder.Services.AddCommonInfrastructure(builder.Configuration, "ScoringService");
 builder.Services.AddCommonApplication();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(c => c.SwaggerDoc("v1", new() { Title = "ScoringService API", Version = "v1" }));
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new() { Title = "ScoringService API", Version = "v1" });
+    var xmlFile = $"{typeof(ScoringService.Api.Program).Assembly.GetName().Name}.xml";
+    var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+    if (File.Exists(xmlPath))
+        c.IncludeXmlComments(xmlPath);
+});
 
 // Database
 builder.Services.AddDbContext<ScoringDbContext>(options =>
@@ -74,7 +82,11 @@ app.MapGet("/api/scores", async (
         dtos, total, page, pageSize,
         (int)Math.Ceiling(total / (double)pageSize)
     ));
-});
+})
+.Produces<PaginatedScoresDto>(StatusCodes.Status200OK)
+.WithTags("Scores")
+.WithName("GetScores")
+.WithDescription("Returns paginated opportunity scores ranked by composite score, optionally filtered by minimum profit margin.");
 
 // GET /api/scores/{matchId}
 app.MapGet("/api/scores/{matchId:guid}", async (
@@ -108,7 +120,12 @@ app.MapGet("/api/scores/{matchId:guid}", async (
     };
 
     return Results.Ok(new ScoringBreakdownDto(s.MatchId, s.CompositeScore, factors, null));
-});
+})
+.Produces<ScoringBreakdownDto>(StatusCodes.Status200OK)
+.Produces(StatusCodes.Status404NotFound)
+.WithTags("Scores")
+.WithName("GetScoreByMatchId")
+.WithDescription("Returns a detailed scoring breakdown for a specific product match.");
 
 // POST /api/scores — calculate score for a match
 app.MapPost("/api/scores", async (
@@ -119,8 +136,11 @@ app.MapPost("/api/scores", async (
     CancellationToken ct) =>
 {
     var shipping = cmd.ShippingCostUsd ?? 10.0m;
-    var breakdown = calculator.CalculateBreakdown(cmd.UsPriceUsd, cmd.ExchangeRate, shipping,
-        cmd.ImportDutyRatePct, cmd.VatRatePct);
+    // P2-B06: honour manual overrides (LandedCostOverrideVnd, ImportDutyOverridePct)
+    var breakdown = calculator.CalculateBreakdown(
+        cmd.UsPriceUsd, cmd.ExchangeRate, shipping,
+        cmd.ImportDutyOverridePct ?? cmd.ImportDutyRatePct, cmd.VatRatePct,
+        landedCostOverride: cmd.LandedCostOverrideVnd);
     var profitMargin = calculator.CalculateProfitMargin(cmd.VnRetailPriceVnd, breakdown.TotalLandedCostVnd);
     var composite = engine.CalculateCompositeScore(
         profitMargin, cmd.DemandScore, cmd.CompetitionScore,
@@ -154,11 +174,22 @@ app.MapPost("/api/scores", async (
     await db.SaveChangesAsync(ct);
 
     return Results.Created($"/api/scores/{cmd.MatchId}", new { MatchId = cmd.MatchId, CompositeScore = composite });
-});
+})
+.Produces(StatusCodes.Status201Created)
+.ProducesValidationProblems()
+.WithTags("Scores")
+.WithName("CalculateScore")
+.WithDescription("Calculates or updates the composite opportunity score for a product match.");
 
 // PUT /api/scores/weights — update scoring weights (stub)
-app.MapPut("/api/scores/weights", (UpdateWeightsRequest req) =>
-    Results.Ok(new { Status = "Weights updated", Count = req.Weights.Count }));
+app.MapPut("/api/scores/weights", (
+    UpdateWeightsRequest req) =>
+    Results.Ok(new { Status = "Weights updated", Count = req.Weights.Count }))
+.Produces(StatusCodes.Status200OK)
+.ProducesValidationProblems()
+.WithTags("Scores")
+.WithName("UpdateWeights")
+.WithDescription("Updates the scoring factor weights (admin endpoint).");
 
 // GET /api/scores/config — get current scoring weights
 app.MapGet("/api/scores/config", () =>
@@ -167,15 +198,65 @@ app.MapGet("/api/scores/config", () =>
         .Select(kv => new ScoringConfigItemDto(kv.Key, kv.Value, 0m, 100m))
         .ToList();
     return Results.Ok(new ScoringConfigDto(weights));
-});
+})
+.Produces<ScoringConfigDto>(StatusCodes.Status200OK)
+.WithTags("Scores")
+.WithName("GetScoringConfig")
+.WithDescription("Returns the current scoring factor weights and their configurable ranges.");
 
 // POST /api/scores/recalculate — trigger full recalculation
 app.MapPost("/api/scores/recalculate", async (ScoringDbContext db, CancellationToken ct) =>
 {
     var count = await db.OpportunityScores.CountAsync(ct);
     return Results.Ok(new { Recalculated = count, At = DateTime.UtcNow });
-});
+})
+.Produces(StatusCodes.Status200OK)
+.WithTags("Scores")
+.WithName("RecalculateAllScores")
+.WithDescription("Triggers a full recalculation of all opportunity scores.");
 
-app.MapGet("/health", () => Results.Ok(new { Status = "Healthy", Service = "ScoringService", Timestamp = DateTime.UtcNow }));
+app.MapGet("/health", () => Results.Ok(new { Status = "Healthy", Service = "ScoringService", Timestamp = DateTime.UtcNow }))
+   .WithTags("Health")
+   .WithName("HealthCheck")
+   .WithDescription("Returns the health status of the ScoringService.");
+
+// P2-B06: PUT /api/scores/manual-costs — store manual landed-cost overrides for a match
+app.MapPut("/api/scores/manual-costs", async (
+    ManualCostOverrideRequest req,
+    ScoringDbContext db,
+    CancellationToken ct) =>
+{
+    var score = await db.OpportunityScores
+        .FirstOrDefaultAsync(x => x.MatchId == req.MatchId, ct);
+
+    if (score is null) return Results.NotFound();
+
+    // Apply any provided overrides
+    if (req.LandedCostOverrideVnd.HasValue)
+    {
+        score.LandedCostVnd = req.LandedCostOverrideVnd.Value;
+        score.PriceDifferenceVnd = score.VietnamRetailVnd - score.LandedCostVnd;
+        score.ProfitMarginPct = score.VietnamRetailVnd > 0
+            ? Math.Max(0, (score.PriceDifferenceVnd / score.VietnamRetailVnd) * 100m)
+            : 0;
+    }
+
+    score.UpdatedAt = DateTime.UtcNow;
+    db.OpportunityScores.Update(score);
+    await db.SaveChangesAsync(ct);
+
+    return Results.Ok(new
+    {
+        MatchId = score.MatchId,
+        LandedCostVnd = score.LandedCostVnd,
+        ProfitMarginPct = score.ProfitMarginPct,
+        UpdatedAt = score.UpdatedAt
+    });
+})
+.Produces(StatusCodes.Status200OK)
+.Produces(StatusCodes.Status404NotFound)
+.WithTags("Scores")
+.WithName("UpdateManualCosts")
+.WithDescription("Stores or updates manual landed-cost overrides for a product match without re-running the full scoring engine.");
 
 app.Run();

@@ -1,4 +1,5 @@
 using Common.Domain.Entities;
+using Common.Infrastructure.Messaging.Outbox;
 using Microsoft.EntityFrameworkCore;
 
 namespace Common.Infrastructure.Persistence;
@@ -9,6 +10,11 @@ namespace Common.Infrastructure.Persistence;
 public abstract class BaseDbContext : DbContext
 {
     protected BaseDbContext(DbContextOptions options) : base(options) { }
+
+    /// <summary>
+    /// Shared outbox table used by the transactional outbox pattern.
+    /// </summary>
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
     public override Task<int> SaveChangesAsync(CancellationToken ct = default)
     {

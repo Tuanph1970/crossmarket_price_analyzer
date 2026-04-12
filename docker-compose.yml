@@ -5,6 +5,7 @@ services:
   mysql:
     image: mysql:8.0
     container_name: cma-mysql
+    restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
       MYSQL_DATABASE: cma_products
@@ -21,6 +22,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: cma-redis
+    restart: unless-stopped
     ports:
       - "6379:6379"
     volumes:
@@ -34,6 +36,7 @@ services:
   rabbitmq:
     image: rabbitmq:3.12-management-alpine
     container_name: cma-rabbitmq
+    restart: unless-stopped
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
@@ -54,6 +57,7 @@ services:
       context: ./src/Services/ProductService/ProductService.Api
       dockerfile: Dockerfile
     container_name: cma-product-api
+    restart: unless-stopped
     ports:
       - "5001:8080"
     environment:
@@ -61,6 +65,14 @@ services:
       - ConnectionStrings__DefaultConnection=Server=mysql;Port=3306;Database=cma_products;User=root;Password=rootpassword;
       - Redis__ConnectionString=redis:6379
       - RabbitMq__Host=rabbitmq
+    healthcheck:
+      test: ["CMD", "/app/healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    volumes:
+      - ./infrastructure/docker/healthcheck.sh:/app/healthcheck.sh:ro
     depends_on:
       mysql:
         condition: service_healthy
@@ -74,12 +86,21 @@ services:
       context: ./src/Services/MatchingService/MatchingService.Api
       dockerfile: Dockerfile
     container_name: cma-matching-api
+    restart: unless-stopped
     ports:
       - "5002:8080"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Server=mysql;Port=3306;Database=cma_matching;User=root;Password=rootpassword;
       - RabbitMq__Host=rabbitmq
+    healthcheck:
+      test: ["CMD", "/app/healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    volumes:
+      - ./infrastructure/docker/healthcheck.sh:/app/healthcheck.sh:ro
     depends_on:
       mysql:
         condition: service_healthy
@@ -91,12 +112,21 @@ services:
       context: ./src/Services/ScoringService/ScoringService.Api
       dockerfile: Dockerfile
     container_name: cma-scoring-api
+    restart: unless-stopped
     ports:
       - "5003:8080"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Server=mysql;Port=3306;Database=cma_scoring;User=root;Password=rootpassword;
       - RabbitMq__Host=rabbitmq
+    healthcheck:
+      test: ["CMD", "/app/healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    volumes:
+      - ./infrastructure/docker/healthcheck.sh:/app/healthcheck.sh:ro
     depends_on:
       mysql:
         condition: service_healthy
@@ -108,12 +138,21 @@ services:
       context: ./src/Services/NotificationService/NotificationService.Api
       dockerfile: Dockerfile
     container_name: cma-notification-api
+    restart: unless-stopped
     ports:
       - "5004:8080"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Server=mysql;Port=3306;Database=cma_notifications;User=root;Password=rootpassword;
       - RabbitMq__Host=rabbitmq
+    healthcheck:
+      test: ["CMD", "/app/healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    volumes:
+      - ./infrastructure/docker/healthcheck.sh:/app/healthcheck.sh:ro
     depends_on:
       mysql:
         condition: service_healthy
@@ -125,11 +164,20 @@ services:
       context: ./src/Services/ScrapingService/ScrapingService.Worker
       dockerfile: Dockerfile
     container_name: cma-scraping-worker
+    restart: unless-stopped
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Server=mysql;Port=3306;Database=cma_scraping;User=root;Password=rootpassword;
       - Redis__ConnectionString=redis:6379
       - RabbitMq__Host=rabbitmq
+    healthcheck:
+      test: ["CMD", "/app/healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    volumes:
+      - ./infrastructure/docker/healthcheck.sh:/app/healthcheck.sh:ro
     depends_on:
       mysql:
         condition: service_healthy
@@ -144,10 +192,19 @@ services:
       context: ./src/Apps/CMA.Gateway
       dockerfile: Dockerfile
     container_name: cma-gateway
+    restart: unless-stopped
     ports:
       - "8080:8080"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
+    healthcheck:
+      test: ["CMD", "/app/healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    volumes:
+      - ./infrastructure/docker/healthcheck.sh:/app/healthcheck.sh:ro
     depends_on:
       - product-api
       - matching-api
@@ -159,6 +216,7 @@ services:
       context: ./src/Apps/CMA.WebApp
       dockerfile: Dockerfile
     container_name: cma-frontend
+    restart: unless-stopped
     ports:
       - "3000:80"
     depends_on:
@@ -168,25 +226,32 @@ services:
   prometheus:
     image: prom/prometheus:latest
     container_name: cma-prometheus
+    restart: unless-stopped
     ports:
       - "9090:9090"
     volumes:
-      - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./infrastructure/docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
     profiles:
       - observability
 
   grafana:
     image: grafana/grafana:latest
     container_name: cma-grafana
+    restart: unless-stopped
     ports:
       - "3001:3000"
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
       - grafana_data:/var/lib/grafana
+      - ./infrastructure/docker/grafana/provisioning:/etc/grafana/provisioning:ro
     profiles:
       - observability
 
@@ -195,3 +260,4 @@ volumes:
   redis_data:
   rabbitmq_data:
   grafana_data:
+  prometheus_data:

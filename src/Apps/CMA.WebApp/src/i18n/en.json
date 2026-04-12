@@ -1,32 +1,48 @@
 {
   "nav": {
-    "dashboard": "Dashboard", "compare": "Compare", "categories": "Categories",
-    "history": "Price History", "quickLookup": "Quick Lookup",
-    "alerts": "Alerts", "settings": "Settings"
+    "dashboard": "Dashboard",
+    "compare": "Compare",
+    "categories": "Categories",
+    "priceHistory": "Price History",
+    "quickLookup": "Quick Lookup",
+    "alerts": "Alerts",
+    "settings": "Settings"
   },
   "dashboard": {
     "title": "Opportunity Dashboard",
+    "subtitle": "Cross-border trade opportunities",
     "totalOpportunities": "Total Opportunities",
-    "avgMargin": "Avg Margin", "avgDemand": "Avg Demand",
+    "avgMargin": "Avg Margin",
+    "avgDemand": "Avg Demand",
     "highOpportunities": "High Opportunities",
     "noResults": "No opportunities found matching your filters.",
-    "loadMore": "Load More"
+    "loadMore": "Load More",
+    "filterBar": {
+      "minMargin": "Min Margin",
+      "anyMargin": "Any Margin",
+      "resetFilters": "Reset Filters"
+    },
+    "opportunityCard": {
+      "landedCost": "Landed",
+      "retail": "Retail",
+      "margin": "Margin",
+      "demand": "Demand",
+      "competition": "Competition",
+      "stability": "Stability",
+      "confidence": "Confidence"
+    },
+    "noOpportunities": "No opportunities found matching your filters.",
+    "loading": "Loading opportunities...",
+    "page": "Page"
   },
-  "quickLookup": {
-    "title": "Quick Lookup",
-    "placeholder": "Paste a product URL (Amazon, Walmart, cigarpage.com, Shopee)...",
-    "analyze": "Analyze",
-    "analyzing": "Analyzing...",
-    "error": "Failed to analyze URL",
-    "scrapedProduct": "Scraped Product",
-    "vnMatches": "Vietnam Matches",
-    "scores": "Opportunity Scores",
-    "exchangeRate": "Exchange Rate",
-    "noMatches": "No Vietnam matches found above the score threshold.",
-    "viewComparison": "View Full Comparison",
-    "productNotFound": "Could not extract product details from this URL.",
-    "matchScore": "Match Score",
-    "retailPrice": "Retail Price",
+  "opportunity": {
+    "matchId": "Match",
+    "landed": "Landed",
+    "retail": "Retail",
+    "margin": "Margin",
+    "demand": "Demand",
+    "competition": "Competition",
+    "stability": "Stability",
     "confidence": "Confidence"
   },
   "comparison": {
@@ -34,7 +50,9 @@
     "enterId": "Enter match ID to compare...",
     "compositeScore": "Composite Score",
     "landedCost": "Landed Cost Breakdown",
-    "usPurchase": "US Purchase",
+    "usProduct": "US Product",
+    "vnProduct": "Vietnam Product",
+    "usPurchase": "US Purchase Price",
     "exchangeRate": "Exchange Rate",
     "cif": "CIF",
     "importDuty": "Import Duty (5%)",
@@ -45,16 +63,90 @@
     "competition": "Competition",
     "stability": "Stability",
     "confidence": "Confidence",
+    "scoreBreakdown": "Score Breakdown",
+    "totalScore": "Total Score",
+    "confirmMatch": "Confirm Match",
+    "rejectMatch": "Reject Match",
     "noData": "No score data found for this match.",
     "enterPrompt": "Enter a match ID above to view the score breakdown."
   },
+  "priceHistory": {
+    "title": "Price History",
+    "from": "From",
+    "to": "To",
+    "usPrice": "US Price",
+    "vnPrice": "VN Price",
+    "export": "Export CSV",
+    "noData": "No price history available",
+    "noDataDesc": "There is no price history data for this product in the selected date range.",
+    "latestSnapshot": "Latest Snapshot",
+    "seller": "Seller",
+    "confidence": "Confidence Level",
+    "confidenceDesc": "Based on data completeness and price variance.",
+    "dataPoints": "{{count}} data points",
+    "errorLoading": "Could not load price history."
+  },
+  "quickLookup": {
+    "title": "Quick Lookup",
+    "placeholder": "Paste a product URL (Amazon, Walmart, cigarpage.com, Shopee)...",
+    "submit": "Analyze",
+    "loading": "Analyzing...",
+    "results": {
+      "scrapedProduct": "Scraped Product",
+      "vnMatches": "Vietnam Matches",
+      "scores": "Opportunity Scores",
+      "exchangeRate": "Exchange Rate",
+      "noMatches": "No Vietnam matches found above the score threshold.",
+      "viewComparison": "View Full Comparison",
+      "productNotFound": "Could not extract product details from this URL.",
+      "matchScore": "Match Score",
+      "retailPrice": "Retail Price",
+      "confidence": "Confidence"
+    },
+    "noResults": "No results found."
+  },
+  "alerts": {
+    "title": "Alerts",
+    "noAlerts": "No alerts at the moment.",
+    "noAlertsDesc": "You're all caught up. Alerts will appear here when opportunities meet your threshold.",
+    "markRead": "Mark as read",
+    "markUnread": "Mark as unread",
+    "delete": "Delete"
+  },
   "settings": {
-    "title": "Settings"
+    "title": "Settings",
+    "scoringWeights": {
+      "title": "Scoring Weights",
+      "description": "Adjust how each factor contributes to the composite opportunity score.",
+      "profitMargin": "Profit Margin",
+      "demand": "Demand Score",
+      "competition": "Competition Level",
+      "stability": "Price Stability",
+      "confidence": "Match Confidence",
+      "total": "Total weight",
+      "totalWarning": "Weights should sum to 100% for accurate scoring.",
+      "preview": "Sample composite score preview",
+      "previewDesc": "Based on fixed sample factor values."
+    },
+    "resetDefaults": "Reset to defaults",
+    "save": "Save Weights",
+    "saved": "Settings saved successfully!",
+    "saveFailed": "Could not save weights.",
+    "resetDone": "Weights reset to defaults.",
+    "activeConfig": "Active Configuration"
   },
   "common": {
-    "loading": "Loading...", "error": "An error occurred",
-    "retry": "Retry", "export": "Export CSV", "save": "Save",
-    "cancel": "Cancel", "confirm": "Confirm", "reject": "Reject",
-    "search": "Search products..."
+    "loading": "Loading...",
+    "error": "An error occurred",
+    "retry": "Retry",
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "delete": "Delete",
+    "edit": "Edit",
+    "noData": "No data available",
+    "export": "Export CSV",
+    "previous": "Previous",
+    "next": "Next"
   }
 }

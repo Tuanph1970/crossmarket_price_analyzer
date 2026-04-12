@@ -1,32 +1,48 @@
 {
   "nav": {
-    "dashboard": "Bảng điều khiển", "compare": "So sánh", "categories": "Danh mục",
-    "history": "Lịch sử giá", "quickLookup": "Tra cứu nhanh",
-    "alerts": "Thông báo", "settings": "Cài đặt"
+    "dashboard": "Bảng điều khiển",
+    "compare": "So sánh",
+    "categories": "Danh mục",
+    "priceHistory": "Lịch sử giá",
+    "quickLookup": "Tra cứu nhanh",
+    "alerts": "Thông báo",
+    "settings": "Cài đặt"
   },
   "dashboard": {
     "title": "Bảng điều khiển cơ hội",
+    "subtitle": "Cơ hội kinh doanh xuyên biên giới",
     "totalOpportunities": "Tổng cơ hội",
-    "avgMargin": "Biên lợi nhuận TB", "avgDemand": "Nhu cầu TB",
+    "avgMargin": "Biên lợi nhuận TB",
+    "avgDemand": "Nhu cầu TB",
     "highOpportunities": "Cơ hội cao",
     "noResults": "Không tìm thấy cơ hội phù hợp.",
-    "loadMore": "Tải thêm"
+    "loadMore": "Tải thêm",
+    "filterBar": {
+      "minMargin": "Biên lợi nhuận tối thiểu",
+      "anyMargin": "Mọi biên",
+      "resetFilters": "Đặt lại bộ lọc"
+    },
+    "opportunityCard": {
+      "landedCost": "Giá landa",
+      "retail": "Bán lẻ",
+      "margin": "Biên lợi nhuận",
+      "demand": "Nhu cầu",
+      "competition": "Cạnh tranh",
+      "stability": "Ổn định",
+      "confidence": "Độ tin cậy"
+    },
+    "noOpportunities": "Không tìm thấy cơ hội phù hợp với bộ lọc của bạn.",
+    "loading": "Đang tải cơ hội...",
+    "page": "Trang"
   },
-  "quickLookup": {
-    "title": "Tra cứu nhanh",
-    "placeholder": "Dán URL sản phẩm (Amazon, Walmart, cigarpage.com, Shopee)...",
-    "analyze": "Phân tích",
-    "analyzing": "Đang phân tích...",
-    "error": "Không thể phân tích URL",
-    "scrapedProduct": "Sản phẩm đã lấy",
-    "vnMatches": "Sản phẩm Việt Nam khớp",
-    "scores": "Điểm cơ hội",
-    "exchangeRate": "Tỷ giá",
-    "noMatches": "Không tìm thấy sản phẩm Việt Nam khớp với ngưỡng điểm.",
-    "viewComparison": "Xem so sánh đầy đủ",
-    "productNotFound": "Không thể trích xuất thông tin sản phẩm từ URL này.",
-    "matchScore": "Điểm khớp",
-    "retailPrice": "Giá bán lẻ",
+  "opportunity": {
+    "matchId": "So khớp",
+    "landed": "Giá landa",
+    "retail": "Bán lẻ",
+    "margin": "Biên lợi nhuận",
+    "demand": "Nhu cầu",
+    "competition": "Cạnh tranh",
+    "stability": "Ổn định",
     "confidence": "Độ tin cậy"
   },
   "comparison": {
@@ -34,6 +50,8 @@
     "enterId": "Nhập ID so khớp để so sánh...",
     "compositeScore": "Điểm tổng hợp",
     "landedCost": "Chi phí đã tính landa",
+    "usProduct": "Sản phẩm Mỹ",
+    "vnProduct": "Sản phẩm Việt Nam",
     "usPurchase": "Giá mua từ Mỹ",
     "exchangeRate": "Tỷ giá",
     "cif": "CIF",
@@ -45,16 +63,90 @@
     "competition": "Cạnh tranh",
     "stability": "Ổn định",
     "confidence": "Độ tin cậy",
+    "scoreBreakdown": "Chi tiết điểm",
+    "totalScore": "Tổng điểm",
+    "confirmMatch": "Xác nhận so khớp",
+    "rejectMatch": "Từ chối so khớp",
     "noData": "Không tìm thấy dữ liệu điểm cho so khớp này.",
     "enterPrompt": "Nhập ID so khớp ở trên để xem chi tiết điểm."
   },
+  "priceHistory": {
+    "title": "Lịch sử giá",
+    "from": "Từ ngày",
+    "to": "Đến ngày",
+    "usPrice": "Giá Mỹ",
+    "vnPrice": "Giá Việt",
+    "export": "Xuất CSV",
+    "noData": "Không có dữ liệu lịch sử giá",
+    "noDataDesc": "Không có dữ liệu lịch sử giá cho sản phẩm này trong khoảng thời gian đã chọn.",
+    "latestSnapshot": "Ảnh chụp mới nhất",
+    "seller": "Người bán",
+    "confidence": "Mức độ tin cậy",
+    "confidenceDesc": "Dựa trên tính đầy đủ dữ liệu và biến động giá.",
+    "dataPoints": "{{count}} điểm dữ liệu",
+    "errorLoading": "Không thể tải lịch sử giá."
+  },
+  "quickLookup": {
+    "title": "Tra cứu nhanh",
+    "placeholder": "Dán URL sản phẩm (Amazon, Walmart, cigarpage.com, Shopee)...",
+    "submit": "Phân tích",
+    "loading": "Đang phân tích...",
+    "results": {
+      "scrapedProduct": "Sản phẩm đã lấy",
+      "vnMatches": "Sản phẩm Việt Nam khớp",
+      "scores": "Điểm cơ hội",
+      "exchangeRate": "Tỷ giá",
+      "noMatches": "Không tìm thấy sản phẩm Việt Nam khớp với ngưỡng điểm.",
+      "viewComparison": "Xem so sánh đầy đủ",
+      "productNotFound": "Không thể trích xuất thông tin sản phẩm từ URL này.",
+      "matchScore": "Điểm khớp",
+      "retailPrice": "Giá bán lẻ",
+      "confidence": "Độ tin cậy"
+    },
+    "noResults": "Không tìm thấy kết quả."
+  },
+  "alerts": {
+    "title": "Thông báo",
+    "noAlerts": "Không có thông báo nào.",
+    "noAlertsDesc": "Bạn đã cập nhật hết. Thông báo sẽ xuất hiện ở đây khi có cơ hội đạt ngưỡng.",
+    "markRead": "Đánh dấu đã đọc",
+    "markUnread": "Đánh dấu chưa đọc",
+    "delete": "Xóa"
+  },
   "settings": {
-    "title": "Cài đặt"
+    "title": "Cài đặt",
+    "scoringWeights": {
+      "title": "Trọng số chấm điểm",
+      "description": "Điều chỉnh mức đóng góp của từng yếu tố vào điểm cơ hội tổng hợp.",
+      "profitMargin": "Biên lợi nhuận",
+      "demand": "Điểm nhu cầu",
+      "competition": "Mức cạnh tranh",
+      "stability": "Ổn định giá",
+      "confidence": "Độ tin cậy so khớp",
+      "total": "Tổng trọng số",
+      "totalWarning": "Trọng số phải có tổng bằng 100% để chấm điểm chính xác.",
+      "preview": "Xem trước điểm mẫu",
+      "previewDesc": "Dựa trên các giá trị yếu tố cố định."
+    },
+    "resetDefaults": "Đặt lại mặc định",
+    "save": "Lưu trọng số",
+    "saved": "Cài đặt đã được lưu thành công!",
+    "saveFailed": "Không thể lưu trọng số.",
+    "resetDone": "Trọng số đã được đặt lại về mặc định.",
+    "activeConfig": "Cấu hình hiện tại"
   },
   "common": {
-    "loading": "Đang tải...", "error": "Đã xảy ra lỗi",
-    "retry": "Thử lại", "export": "Xuất CSV", "save": "Lưu",
-    "cancel": "Hủy", "confirm": "Xác nhận", "reject": "Từ chối",
-    "search": "Tìm sản phẩm..."
+    "loading": "Đang tải...",
+    "error": "Đã xảy ra lỗi",
+    "retry": "Thử lại",
+    "save": "Lưu",
+    "cancel": "Hủy",
+    "confirm": "Xác nhận",
+    "delete": "Xóa",
+    "edit": "Chỉnh sửa",
+    "noData": "Không có dữ liệu",
+    "export": "Xuất CSV",
+    "previous": "Trước",
+    "next": "Tiếp"
   }
 }

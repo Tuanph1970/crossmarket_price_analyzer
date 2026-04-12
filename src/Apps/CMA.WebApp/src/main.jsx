@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, keepPreviousData } from '@tanstack/react-query';
 import App from './App.jsx';
 import './index.css';
 import './i18n/index.js';
@@ -15,6 +15,9 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+// Re-export keepPreviousData for use in hooks
+export { keepPreviousData };
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

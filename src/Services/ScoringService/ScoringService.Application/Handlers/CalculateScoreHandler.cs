@@ -22,11 +22,12 @@ public class CalculateScoreHandler : MediatR.IRequestHandler<CalculateScoreComma
 
     public async Task<ScoringBreakdownDto> Handle(CalculateScoreCommand cmd, CancellationToken ct)
     {
-        // 1. Landed cost
+        // 1. Landed cost — P2-B06: honour manual overrides
         var shipping = cmd.ShippingCostUsd ?? 10m;
         var breakdown = _calc.CalculateBreakdown(
             cmd.UsPriceUsd, cmd.ExchangeRate, shipping,
-            cmd.ImportDutyRatePct, cmd.VatRatePct);
+            cmd.ImportDutyOverridePct ?? cmd.ImportDutyRatePct, cmd.VatRatePct,
+            landedCostOverride: cmd.LandedCostOverrideVnd);
         var landedCost = breakdown.TotalLandedCostVnd;
         var margin = _calc.CalculateProfitMargin(cmd.VnRetailPriceVnd, landedCost);
         var composite = _engine.CalculateCompositeScore(

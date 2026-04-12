@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData } from '@tanstack/react-query';
 import { scoringApi } from '@/api/scoringApi';
 
 export const SCORING_KEYS = {
@@ -12,6 +13,7 @@ export function useScores(params = {}, options = {}) {
   return useQuery({
     queryKey: SCORING_KEYS.list(params),
     queryFn: () => scoringApi.getScores(params).then(r => r.data),
+    placeholderData: keepPreviousData,
     ...options,
   });
 }

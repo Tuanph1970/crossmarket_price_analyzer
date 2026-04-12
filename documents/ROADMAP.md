@@ -1,7 +1,7 @@
 # PROJECT ROADMAP
 ## CrossMarket Price Analyzer
 
-**Version:** 1.0 | **Date:** April 3, 2026 | **Status:** Draft
+**Version:** 1.0 | **Date:** April 3, 2026 | **Status:** Phase 2 Complete ✅ | **Updated:** April 12, 2026
 
 ---
 
@@ -153,37 +153,37 @@ This roadmap maps the PRD requirements to 4 execution phases spanning ~30 weeks 
 **Goal:** Fix bugs, add v1.0 edge cases, polish UX, and prepare for first internal release.
 
 ### Backend Polish
-| # | Task | Owner | Type | Priority |
-|---|---|---|---|---|
-| P2-B01 | Add Polly resilience (retry + circuit breaker) to all external calls | Backend | Dev | 🔴 Critical |
-| P2-B02 | Implement outbox pattern for reliable event publishing (v1.5 ready) | Backend | Dev | 🟡 Medium |
-| P2-B03 | Write integration tests (Testcontainers: MySQL + Redis + RabbitMQ) | Backend | Test | 🟡 Medium |
-| P2-B04 | Optimize database queries (add missing indexes, N+1 fixes) | Backend | Dev | 🟡 Medium |
-| P2-B05 | Add RotatingProxyService for scrapers (IP rotation, rate limiting) | Backend | Dev | 🟡 Medium |
-| P2-B06 | Implement manual shipping/duty cost input (override auto-estimate) | Backend | Dev | 🟡 Medium |
-| P2-B07 | Legal review: final scraping compliance sign-off | External | Legal | 🟡 Medium |
+| # | Task | Owner | Type | Priority | Status |
+|---|---|---|---|---|---|
+| P2-B01 | Add Polly resilience (retry + circuit breaker) to all external calls | Backend | Dev | 🔴 Critical | ✅ Complete |
+| P2-B02 | Implement outbox pattern for reliable event publishing (v1.5 ready) | Backend | Dev | 🟡 Medium | ✅ Complete |
+| P2-B03 | Write integration tests (Testcontainers: MySQL + Redis + RabbitMQ) | Backend | Test | 🟡 Medium | ✅ Complete |
+| P2-B04 | Optimize database queries (add missing indexes, N+1 fixes) | Backend | Dev | 🟡 Medium | ✅ Complete |
+| P2-B05 | Add RotatingProxyService for scrapers (IP rotation, rate limiting) | Backend | Dev | 🟡 Medium | ✅ Complete |
+| P2-B06 | Implement manual shipping/duty cost input (override auto-estimate) | Backend | Dev | 🟡 Medium | ✅ Complete |
+| P2-B07 | Legal review: final scraping compliance sign-off | External | Legal | 🟡 Medium | ⏳ Pending |
 
 ### Frontend Polish
-| # | Task | Owner | Type | Priority |
-|---|---|---|---|---|
-| P2-F01 | Build PriceHistoryPage with Recharts line chart + date picker | Frontend | Dev | 🔴 High |
-| P2-F02 | Build AlertsPage with notification list | Frontend | Dev | 🟡 Medium |
-| P2-F03 | Build SettingsPage with scoring weight sliders | Frontend | Dev | 🔴 High |
-| P2-F04 | Internationalization: translate all strings (EN + VI) | Frontend | Dev | 🟡 Medium |
-| P2-F05 | Accessibility audit (axe-core) + fixes | Frontend | QA | 🟡 Medium |
-| P2-F06 | E2E tests: Dashboard, Quick Lookup, Comparison (Playwright) | QA | Test | 🟡 Medium |
-| P2-F07 | Performance optimization (lazy load routes, React.memo cards) | Frontend | Dev | 🟡 Medium |
-| P2-F08 | Empty states + error states for all lists and forms | Frontend | Dev | 🟡 Medium |
+| # | Task | Owner | Type | Priority | Status |
+|---|---|---|---|---|---|
+| P2-F01 | Build PriceHistoryPage with Recharts line chart + date picker | Frontend | Dev | 🔴 High | ✅ Complete |
+| P2-F02 | Build AlertsPage with notification list | Frontend | Dev | 🟡 Medium | ✅ Complete |
+| P2-F03 | Build SettingsPage with scoring weight sliders | Frontend | Dev | 🔴 High | ✅ Complete |
+| P2-F04 | Internationalization: translate all strings (EN + VI) | Frontend | Dev | 🟡 Medium | ✅ Complete |
+| P2-F05 | Accessibility audit (axe-core) + fixes | Frontend | QA | 🟡 Medium | ✅ Complete |
+| P2-F06 | E2E tests: Dashboard, Quick Lookup, Comparison (Playwright) | QA | Test | 🟡 Medium | ✅ Complete |
+| P2-F07 | Performance optimization (lazy load routes, React.memo cards) | Frontend | Dev | 🟡 Medium | ✅ Complete |
+| P2-F08 | Empty states + error states for all lists and forms | Frontend | Dev | 🟡 Medium | ✅ Complete |
 
 ### Deployment & Documentation
-| # | Task | Owner | Type | Priority |
-|---|---|---|---|---|
-| P2-D01 | Configure production Docker Compose with health checks | DevOps | Infra | 🔴 Critical |
-| P2-D02 | Configure GitHub Actions CD pipeline (auto-deploy to staging) | DevOps | Infra | 🔴 Critical |
-| P2-D03 | Set up Prometheus + Grafana monitoring dashboards | DevOps | Infra | 🟡 Medium |
-| P2-D04 | Write API documentation (Swagger/OpenAPI) for all endpoints | Backend | Docs | 🟡 Medium |
-| P2-D05 | Write user guide (markdown) for MVP features | Scribe | Docs | 🟡 Medium |
-| P2-D06 | Internal user acceptance testing (UAT) | Team | QA | 🔴 Critical |
+| # | Task | Owner | Type | Priority | Status |
+|---|---|---|---|---|---|
+| P2-D01 | Configure production Docker Compose with health checks | DevOps | Infra | 🔴 Critical | ✅ Complete |
+| P2-D02 | Configure GitHub Actions CD pipeline (auto-deploy to staging) | DevOps | Infra | 🔴 Critical | ✅ Complete |
+| P2-D03 | Set up Prometheus + Grafana monitoring dashboards | DevOps | Infra | 🟡 Medium | ✅ Complete |
+| P2-D04 | Write API documentation (Swagger/OpenAPI) for all endpoints | Backend | Docs | 🟡 Medium | ✅ Complete |
+| P2-D05 | Write user guide (markdown) for MVP features | Scribe | Docs | 🟡 Medium | ✅ Complete |
+| P2-D06 | Internal user acceptance testing (UAT) | Team | QA | 🔴 Critical | ✅ Complete |
 
 **Phase 2 Exit Criteria:** MVP v1.0 released to internal team for validation.
 

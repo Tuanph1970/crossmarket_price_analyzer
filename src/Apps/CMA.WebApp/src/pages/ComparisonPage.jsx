@@ -1,8 +1,11 @@
 import { useTranslation } from 'react-i18next';
 import { useParams, Link } from 'react-router-dom';
+import { GitCompare } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { EmptyState } from '@/components/shared/EmptyState';
+import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
 import { useScoreBreakdown } from '@/hooks/useScores';
 import { useMatch } from '@/hooks/useMatches';
 import { useScores } from '@/hooks/useScores';
@@ -44,6 +47,7 @@ export default function ComparisonPage() {
   };
 
   return (
+    <ErrorBoundary>
     <PageContainer>
       <h1 className="text-2xl font-bold text-text-primary mb-6">{t('comparison.title')}</h1>
 
@@ -147,26 +151,32 @@ export default function ComparisonPage() {
           <p className="text-text-muted">{t('comparison.noData')}</p>
         )
       ) : (
-        <div className="text-center py-16 space-y-4">
-          <p className="text-text-muted text-lg">{t('comparison.enterPrompt')}</p>
-          {scoresData?.items?.length > 0 && (
+        scoresData?.items?.length > 0 ? (
+          <div className="text-center py-8">
+            <p className="text-sm text-text-muted mb-4">{t('comparison.enterId', 'Recent matches')}:</p>
             <div className="max-w-md mx-auto space-y-2">
-              <p className="text-sm text-text-muted">Recent matches:</p>
               <div className="space-y-1">
                 {(scoresData.items.slice(0, 5) || []).map((score) => (
                   <Link
                     key={score.matchId}
                     to={`/compare/${score.matchId}`}
-                    className="block p-2 border border-border rounded hover:bg-bg-secondary text-sm text-text-primary transition-colors"
+                    className="block p-3 border border-border rounded-lg hover:bg-bg-secondary text-sm text-text-primary transition-colors"
                   >
                     Match #{score.matchId?.slice(0, 8)} — Score: {score.compositeScore?.toFixed(1) ?? '—'}
                   </Link>
                 ))}
               </div>
             </div>
-          )}
-        </div>
+          </div>
+        ) : (
+          <EmptyState
+            icon={GitCompare}
+            title={t('comparison.title', 'Opportunity Comparison')}
+            description={t('comparison.enterPrompt', 'Enter a match ID above to view the score breakdown.')}
+          />
+        )
       )}
     </PageContainer>
+    </ErrorBoundary>
   );
 }

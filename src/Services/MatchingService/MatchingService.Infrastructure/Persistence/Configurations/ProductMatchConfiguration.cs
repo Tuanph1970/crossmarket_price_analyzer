@@ -26,5 +26,9 @@ public class ProductMatchConfiguration : IEntityTypeConfiguration<ProductMatch>
         builder.HasIndex(p => p.Status).HasDatabaseName("idx_status");
         builder.HasIndex(p => p.UsProductId).HasDatabaseName("idx_us_product");
         builder.HasIndex(p => p.ConfidenceScore).HasDatabaseName("idx_confidence");
+        // P2-B04: missing production indexes
+        builder.HasIndex(p => p.VnProductId).HasDatabaseName("idx_vn_product");
+        builder.HasIndex(p => new { p.UsProductId, p.VnProductId }).HasDatabaseName("idx_us_vn_product");
+        builder.HasIndex(p => new { p.Status, p.ConfidenceScore }).HasDatabaseName("idx_status_confidence");
     }
 }

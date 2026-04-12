@@ -1,44 +1,96 @@
-import { useState } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
-import { Download } from 'lucide-react';
+import { Download, TrendingUp } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
+import { MetricCard } from '@/components/ui/MetricCard';
+import { Button } from '@/components/ui/Button';
+import { FilterBar } from '@/components/shared/FilterBar';
+import { OpportunityCard } from '@/components/shared/OpportunityCard';
+import { EmptyState } from '@/components/shared/EmptyState';
+import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
 import { useDashboardMetrics } from '@/hooks/useOpportunities';
 import { useScores } from '@/hooks/useScores';
 import { useFilterStore } from '@/store/filterStore';
-import { Button } from '@/components/ui/Button';
-import { Select } from '@/components/ui/Select';
-import { MetricCard } from '@/components/ui/MetricCard';
+import { keepPreviousData } from '@tanstack/react-query';
 
 export default function DashboardPage() {
   const { t } = useTranslation();
   const [page, setPage] = useState(1);
   const filters = useFilterStore();
-  const { data: metrics, isLoading: metricsLoading } = useDashboardMetrics({ minMargin: filters.minMargin || undefined });
-  const { data: scoresData, isLoading: scoresLoading } = useScores({ page, pageSize: 20, minMargin: filters.minMargin || undefined });
+
+  const { data: metrics, isLoading: metricsLoading } = useDashboardMetrics({
+    minMargin: filters.minMargin || undefined,
+  });
+
+  const { data: scoresData, isLoading: scoresLoading } = useScores(
+    { page, pageSize: 20, minMargin: filters.minMargin || undefined },
+    { placeholderData: keepPreviousData }
+  );
 
   const items = scoresData?.items ?? [];
 
+  // ARIA live region: announce count changes
+  const [announcement, setAnnouncement] = useState('');
+  useEffect(() => {
+    if (!scoresLoading && items.length > 0) {
+      setAnnouncement(
+        `${items.length} ${items.length === 1 ? 'opportunity' : 'opportunities'} displayed`
+      );
+    } else if (!scoresLoading && items.length === 0) {
+      setAnnouncement('No opportunities found. Adjust your filters.');
+    }
+  }, [items.length, scoresLoading]);
+
+  const handleExportCSV = useCallback(() => {
+    const rows = [
+      ['MatchId', 'CompositeScore', 'ProfitMargin%', 'Demand', 'Competition', 'Stability', 'Confidence', 'LandedCostVND', 'RetailVND'],
+      ...items.map(s => [
+        s.matchId ?? '', s.compositeScore ?? 0, s.profitMarginPct ?? 0,
+        s.demandScore ?? 0, s.competitionScore ?? 0, s.priceStabilityScore ?? 0,
+        s.matchConfidenceScore ?? 0, s.landedCostVnd ?? 0, s.vietnamRetailVnd ?? 0,
+      ]),
+    ];
+    const csv = rows.map(r => r.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url;
+    a.download = `opportunities-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click(); URL.revokeObjectURL(url);
+  }, [items]);
+
+  const handlePrev = useCallback(() => setPage(p => p - 1), []);
+  const handleNext = useCallback(() => setPage(p => p + 1), []);
+
   return (
+    <ErrorBoundary>
     <PageContainer>
+      {/* Skip-to-content link */}
+      <a href="#main-opportunities" className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-primary focus:text-white focus:rounded">
+        Skip to opportunities
+      </a>
+
       <h1 className="text-2xl font-bold text-text-primary mb-6">{t('dashboard.title')}</h1>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
         <MetricCard
+          data-testid="metric-total"
           label={t('dashboard.totalOpportunities')}
           value={metricsLoading ? '—' : metrics?.total ?? 0}
         />
         <MetricCard
+          data-testid="metric-avg-margin"
           label={t('dashboard.avgMargin')}
           value={metricsLoading ? '—' : `${metrics?.avgMargin ?? 0}%`}
           variant="primary"
         />
         <MetricCard
+          data-testid="metric-avg-demand"
           label={t('dashboard.avgDemand')}
           value={metricsLoading ? '—' : `${metrics?.avgDemand ?? 0}`}
           variant="warning"
         />
         <MetricCard
+          data-testid="metric-high-opps"
           label={t('dashboard.highOpportunities')}
           value={metricsLoading ? '—' : metrics?.highOpps ?? 0}
           variant="success"
@@ -47,82 +99,77 @@ export default function DashboardPage() {
 
       {/* Filter Bar */}
       <div className="flex flex-wrap gap-3 mb-6">
-        <Select
-          placeholder="Min Margin %"
-          value={filters.minMargin}
-          onChange={(e) => filters.setMinMargin(Number(e.target.value))}
-          options={[
-            { value: 0, label: 'Any Margin' },
-            { value: 10, label: '≥ 10%' },
-            { value: 20, label: '≥ 20%' },
-            { value: 30, label: '≥ 30%' },
-          ]}
-        />
-        <Button variant="outline" onClick={() => filters.resetFilters()}>Reset Filters</Button>
+        <FilterBar />
         <Button
           variant="outline"
-          onClick={() => {
-            const rows = [
-              ['MatchId', 'CompositeScore', 'ProfitMargin%', 'Demand', 'Competition', 'Stability', 'Confidence', 'LandedCostVND', 'RetailVND'],
-              ...items.map(s => [
-                s.matchId ?? '', s.compositeScore ?? 0, s.profitMarginPct ?? 0,
-                s.demandScore ?? 0, s.competitionScore ?? 0, s.priceStabilityScore ?? 0,
-                s.matchConfidenceScore ?? 0, s.landedCostVnd ?? 0, s.vietnamRetailVnd ?? 0,
-              ]),
-            ];
-            const csv = rows.map(r => r.join(',')).join('\n');
-            const blob = new Blob([csv], { type: 'text/csv' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a'); a.href = url;
-            a.download = `opportunities-${new Date().toISOString().slice(0, 10)}.csv`;
-            a.click(); URL.revokeObjectURL(url);
-          }}
+          onClick={handleExportCSV}
+          aria-label="Export opportunities to CSV"
         >
-          <Download className="w-4 h-4 mr-1.5 inline" />
+          <Download className="w-4 h-4 mr-1.5 inline" aria-hidden="true" />
           {t('common.export', 'Export CSV')}
         </Button>
       </div>
 
+      {/* ARIA live region for dynamic content updates */}
+      <div
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        className="sr-only"
+      >
+        {announcement}
+      </div>
+
       {/* Opportunity Cards */}
-      <div className="space-y-4">
+      <div
+        id="main-opportunities"
+        className="space-y-4"
+        aria-label="Opportunity results"
+        aria-busy={scoresLoading}
+      >
         {scoresLoading && items.length === 0 ? (
-          <p className="text-text-muted">Loading opportunities...</p>
+          <p className="text-text-muted" role="status" aria-label="Loading opportunities">
+            {t('dashboard.loading', 'Loading opportunities...')}
+          </p>
         ) : items.length === 0 ? (
-          <p className="text-text-muted">No opportunities found. Adjust your filters.</p>
+          <EmptyState
+            icon={TrendingUp}
+            title={t('dashboard.noOpportunities', 'No opportunities found matching your filters.')}
+            description={t('dashboard.noResults', 'Try adjusting the filters or check back later.')}
+            action={filters.resetFilters}
+            actionLabel={t('dashboard.filterBar.resetFilters', 'Reset Filters')}
+          />
         ) : items.map((score) => (
-          <div key={score.id ?? score.matchId} className="bg-bg-secondary border border-border rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer">
-            <div className="flex justify-between items-start">
-              <div>
-                <div className="font-semibold text-text-primary">Match #{score.matchId?.slice(0, 8)}</div>
-                <div className="text-sm text-text-muted">Landed: {score.landedCostVnd?.toLocaleString('vi-VN')} VND · Retail: {score.vietnamRetailVnd?.toLocaleString('vi-VN')} VND</div>
-              </div>
-              <div className={`px-3 py-1 rounded-full text-sm font-bold ${
-                (score.compositeScore ?? 0) >= 80 ? 'bg-green-100 text-green-800' :
-                (score.compositeScore ?? 0) >= 60 ? 'bg-yellow-100 text-yellow-800' :
-                'bg-red-100 text-red-800'
-              }`}>
-                {score.compositeScore ?? 0}
-              </div>
-            </div>
-            <div className="mt-2 grid grid-cols-5 gap-2 text-xs">
-              <div><span className="text-text-muted">Margin:</span> {score.profitMarginPct?.toFixed(1)}%</div>
-              <div><span className="text-text-muted">Demand:</span> {score.demandScore}</div>
-              <div><span className="text-text-muted">Competition:</span> {score.competitionScore}</div>
-              <div><span className="text-text-muted">Stability:</span> {score.priceStabilityScore}</div>
-              <div><span className="text-text-muted">Confidence:</span> {score.matchConfidenceScore}</div>
-            </div>
-          </div>
+          <OpportunityCard key={score.id ?? score.matchId} score={score} />
         ))}
       </div>
 
       {/* Pagination */}
       {scoresData?.totalCount > 20 && (
-        <div className="flex justify-center gap-2 mt-6">
-          <Button variant="outline" disabled={page === 1} onClick={() => setPage(p => p - 1)}>Previous</Button>
-          <span className="px-4 py-2 text-sm text-text-muted">Page {page}</span>
-          <Button variant="outline" onClick={() => setPage(p => p + 1)}>Next</Button>
-        </div>
+        <nav aria-label="Pagination" className="flex justify-center gap-2 mt-6">
+          <Button
+            data-testid="btn-prev"
+            variant="outline"
+            disabled={page === 1}
+            onClick={handlePrev}
+            aria-label="Previous page"
+          >
+            {t('common.previous', 'Previous')}
+          </Button>
+          <span className="px-4 py-2 text-sm text-text-muted" aria-current="page">
+            {t('dashboard.page', 'Page')} {page}
+          </span>
+          <Button
+            data-testid="btn-next"
+            variant="outline"
+            onClick={handleNext}
+            aria-label="Next page"
+          >
+            {t('common.next', 'Next')}
+          </Button>
+        </nav>
       )}
     </PageContainer>
+    </ErrorBoundary>
   );
 }

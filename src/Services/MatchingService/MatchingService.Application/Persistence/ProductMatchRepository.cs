@@ -104,10 +104,10 @@ public class ProductMatchRepository
 
         var total = await query.CountAsync(ct);
         var items = await query
+            .Include(m => m.Confirmations)
             .OrderByDescending(m => m.ConfidenceScore)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Include(m => m.Confirmations)
             .ToListAsync(ct);
 
         return (items, total);

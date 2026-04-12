@@ -2,7 +2,11 @@ using Common.Application.Extensions;
 using Common.Application.Interfaces;
 using Common.Domain.Scraping;
 using Common.Infrastructure.Configuration;
+using Common.Infrastructure.Resilience;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Polly;
+using Polly.ExtensionsHttp;
 using ProductService.Application.Commands;
 using ProductService.Application.DTOs;
 using ProductService.Application.Services;
@@ -18,6 +22,10 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new() { Title = "ProductService API", Version = "v1" });
+    var xmlFile = $"{typeof(ProductService.Api.Program).Assembly.GetName().Name}.xml";
+    var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+    if (File.Exists(xmlPath))
+        c.IncludeXmlComments(xmlPath);
 });
 
 // 2. Add infrastructure (DB, Redis, RabbitMQ, OpenTelemetry, Serilog)
@@ -37,9 +45,18 @@ builder.Services.AddDbContext<ProductDbContext>(options =>
 // 4b. Register IProductDbContext alias
 builder.Services.AddScoped<IProductDbContext>(sp => sp.GetRequiredService<ProductDbContext>());
 
-// 5. HTTP clients
+// 5. HTTP clients — with Polly resilience
 builder.Services.AddHttpClient("ExchangeRate")
-    .ConfigureHttpClient(c => c.Timeout = TimeSpan.FromSeconds(30));
+    .ConfigureHttpClient(c => c.Timeout = TimeSpan.FromSeconds(30))
+    .AddStandardResilienceHandler(opts =>
+    {
+        opts.Retry.MaxRetryAttempts = 3;
+        opts.Retry.BackoffType = DelayBackoffType.Exponential;
+        opts.CircuitBreaker.FailureRatio = 0.5;
+        opts.CircuitBreaker.MinimumThroughput = 5;
+        opts.CircuitBreaker.BreakDuration = TimeSpan.FromSeconds(30);
+        opts.Timeout.Timeout = TimeSpan.FromSeconds(30);
+    });
 
 // 6. Register scrapers (IProductScraper implementations)
 builder.Services.AddSingleton<IProductScraper, AmazonScraper>();
@@ -86,14 +103,26 @@ app.MapGet("/api/products", async (
         src = s;
     var result = await svc.GetProductsAsync(page, pageSize, src, categoryId, isActive, ct);
     return Results.Ok(result);
-});
+})
+.Produces<ProductPagedResultDto>(StatusCodes.Status200OK)
+.WithTags("Products")
+.WithName("GetProducts")
+.WithDescription("Returns a paginated list of products with optional filtering by source, category, and active status.");
 
 // GET /api/products/{id}
-app.MapGet("/api/products/{id:guid}", async (Guid id, IProductService svc, CancellationToken ct) =>
+app.MapGet("/api/products/{id:guid}", async (
+    Guid id,
+    IProductService svc,
+    CancellationToken ct) =>
 {
     var result = await svc.GetByIdAsync(id, ct);
     return result is null ? Results.NotFound() : Results.Ok(result);
-});
+})
+.Produces<ProductDto>(StatusCodes.Status200OK)
+.Produces(StatusCodes.Status404NotFound)
+.WithTags("Products")
+.WithName("GetProductById")
+.WithDescription("Returns a single product by its unique identifier.");
 
 // POST /api/products
 app.MapPost("/api/products", async (
@@ -104,7 +133,12 @@ app.MapPost("/api/products", async (
     var result = await svc.CreateAsync(req.Name, req.SourceUrl, req.Source,
         req.Sku, req.HsCode, req.BrandId, req.CategoryId, req.IsActive, ct);
     return Results.Created($"/api/products/{result.Id}", result);
-});
+})
+.Produces<ProductDto>(StatusCodes.Status201Created)
+.ProducesValidationProblems()
+.WithTags("Products")
+.WithName("CreateProduct")
+.WithDescription("Creates a new product record.");
 
 // PUT /api/products/{id}
 app.MapPut("/api/products/{id:guid}", async (
@@ -116,7 +150,13 @@ app.MapPut("/api/products/{id:guid}", async (
     var result = await svc.UpdateAsync(id, req.Name, req.Sku, req.HsCode,
         req.BrandId, req.CategoryId, req.IsActive, ct);
     return result is null ? Results.NotFound() : Results.Ok(result);
-});
+})
+.Produces<ProductDto>(StatusCodes.Status200OK)
+.Produces(StatusCodes.Status404NotFound)
+.ProducesValidationProblems()
+.WithTags("Products")
+.WithName("UpdateProduct")
+.WithDescription("Updates an existing product by its unique identifier.");
 
 // GET /api/products/{id}/price-history
 app.MapGet("/api/products/{id:guid}/price-history", async (
@@ -129,7 +169,11 @@ app.MapGet("/api/products/{id:guid}/price-history", async (
 {
     var result = await svc!.GetPriceHistoryAsync(id, from, to, limit, ct);
     return Results.Ok(result);
-});
+})
+.Produces<List<PriceSnapshotDto>>(StatusCodes.Status200OK)
+.WithTags("Products")
+.WithName("GetProductPriceHistory")
+.WithDescription("Returns the price history for a specific product within an optional date range.");
 
 // POST /api/products/upsert-from-scrape
 app.MapPost("/api/products/upsert-from-scrape", async (
@@ -142,7 +186,12 @@ app.MapPost("/api/products/upsert-from-scrape", async (
         req.SellerRating, req.SalesVolume, req.SourceUrl, req.Source,
         req.HsCode, req.CategoryName, ct);
     return Results.Ok(result);
-});
+})
+.Produces<ProductDto>(StatusCodes.Status200OK)
+.ProducesValidationProblems()
+.WithTags("Scraping")
+.WithName("UpsertProductFromScrape")
+.WithDescription("Upserts a product from scraped data (used by the scraping worker).");
 
 // POST /api/products/quick-lookup — URL → scrape → match → score
 app.MapPost("/api/products/quick-lookup", async (
@@ -154,14 +203,32 @@ app.MapPost("/api/products/quick-lookup", async (
         new QuickLookupCommand(req.Url, req.VnNameFilter, req.MaxVnMatches, req.MinMatchScore),
         ct);
     return Results.Ok(result);
-});
+})
+.Produces<QuickLookupResultDto>(StatusCodes.Status200OK)
+.ProducesValidationProblems()
+.WithTags("Products")
+.WithName("QuickLookup")
+.WithDescription("Scrapes a source URL and returns matching Vietnam products with scores.");
 
 // Health check
-app.MapGet("/health", () => Results.Ok(new { Status = "Healthy", Service = "ProductService", Timestamp = DateTime.UtcNow }));
+app.MapGet("/health", () => Results.Ok(new { Status = "Healthy", Service = "ProductService", Timestamp = DateTime.UtcNow }))
+   .WithTags("Health")
+   .WithName("HealthCheck")
+   .WithDescription("Returns the health status of the ProductService.");
 
 app.Run();
 
-// Request DTOs
+/// <summary>
+/// Request to create a new product.
+/// </summary>
+/// <param name="Name">Product display name.</param>
+/// <param name="SourceUrl">Original source URL where the product was found.</param>
+/// <param name="Source">Retail source (Amazon, Walmart, etc.).</param>
+/// <param name="Sku">Optional SKU or part number.</param>
+/// <param name="HsCode">Optional Harmonized System code for customs.</param>
+/// <param name="BrandId">Optional brand identifier.</param>
+/// <param name="CategoryId">Optional category identifier.</param>
+/// <param name="IsActive">Whether the product is active for matching (default: true).</param>
 public record CreateProductRequest(
     string Name,
     string SourceUrl,
@@ -173,6 +240,15 @@ public record CreateProductRequest(
     bool IsActive = true
 );
 
+/// <summary>
+/// Request to update an existing product.
+/// </summary>
+/// <param name="Name">Updated product name (optional).</param>
+/// <param name="Sku">Updated SKU (optional).</param>
+/// <param name="HsCode">Updated HS code (optional).</param>
+/// <param name="BrandId">Updated brand ID (optional).</param>
+/// <param name="CategoryId">Updated category ID (optional).</param>
+/// <param name="IsActive">Updated active flag (optional).</param>
 public record UpdateProductRequest(
     string? Name = null,
     string? Sku = null,
@@ -182,6 +258,22 @@ public record UpdateProductRequest(
     bool? IsActive = null
 );
 
+/// <summary>
+/// Request to upsert a product from scraped data.
+/// </summary>
+/// <param name="Name">Scraped product name.</param>
+/// <param name="Brand">Brand name from scraped data.</param>
+/// <param name="Sku">SKU from scraped data.</param>
+/// <param name="Price">Scraped price amount.</param>
+/// <param name="Currency">Price currency code (e.g., USD).</param>
+/// <param name="QuantityPerUnit">Quantity per sellable unit.</param>
+/// <param name="SellerName">Name of the seller on the platform.</param>
+/// <param name="SellerRating">Seller rating out of 5 (optional).</param>
+/// <param name="SalesVolume">Number of sales in the observed period (optional).</param>
+/// <param name="SourceUrl">Source URL of the scraped product.</param>
+/// <param name="Source">Source platform enumeration.</param>
+/// <param name="HsCode">Optional HS code.</param>
+/// <param name="CategoryName">Category name from the source platform.</param>
 public record UpsertProductRequest(
     string Name,
     string? Brand,
@@ -198,7 +290,13 @@ public record UpsertProductRequest(
     string? CategoryName = null
 );
 
-// Request DTO for POST /api/products/quick-lookup
+/// <summary>
+/// Request to perform a quick lookup: scrape a source URL and find matching Vietnam products.
+/// </summary>
+/// <param name="Url">Source product URL to scrape.</param>
+/// <param name="VnNameFilter">Optional text filter for Vietnam product names.</param>
+/// <param name="MaxVnMatches">Maximum number of Vietnam matches to return (default: 5).</param>
+/// <param name="MinMatchScore">Minimum match score 0–100 (default: 40).</param>
 public record QuickLookupRequest(
     string Url,
     string? VnNameFilter = null,
