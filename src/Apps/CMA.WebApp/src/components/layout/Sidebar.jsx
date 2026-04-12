@@ -1,17 +1,18 @@
 import { NavLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { LayoutDashboard, GitCompare, FolderOpen, LineChart, Search, Bell, Settings, ChevronLeft } from 'lucide-react';
+import { LayoutDashboard, GitCompare, FolderOpen, LineChart, Search, Bell, Settings, ChevronLeft, Bookmark } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUiStore } from '@/store/uiStore';
 
 const navItems = [
-  { to: '/',          icon: LayoutDashboard, labelKey: 'nav.dashboard' },
-  { to: '/compare',   icon: GitCompare,     labelKey: 'nav.compare' }, // matchId supplied via URL param
-  { to: '/categories', icon: FolderOpen,     labelKey: 'nav.categories' },
-  { to: '/history',   icon: LineChart,     labelKey: 'nav.history' },
-  { to: '/quick-lookup', icon: Search,      labelKey: 'nav.quickLookup' },
-  { to: '/alerts',    icon: Bell,          labelKey: 'nav.alerts' },
-  { to: '/settings',   icon: Settings,       labelKey: 'nav.settings' },
+  { to: '/',            icon: LayoutDashboard, labelKey: 'nav.dashboard' },
+  { to: '/compare',     icon: GitCompare,      labelKey: 'nav.compare' },
+  { to: '/categories',  icon: FolderOpen,      labelKey: 'nav.categories' },
+  { to: '/history',     icon: LineChart,       labelKey: 'nav.history' },
+  { to: '/quick-lookup', icon: Search,         labelKey: 'nav.quickLookup' },
+  { to: '/watchlist',   icon: Bookmark,       labelKey: 'nav.watchlist' },
+  { to: '/alerts',      icon: Bell,           labelKey: 'nav.alerts' },
+  { to: '/settings',    icon: Settings,        labelKey: 'nav.settings' },
 ];
 
 export default function Sidebar() {

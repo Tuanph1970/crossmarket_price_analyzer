@@ -85,6 +85,25 @@ builder.Services.AddHttpClient<ShopeeApiClient>("Shopee")
         opts.Timeout.Timeout = TimeSpan.FromSeconds(30);
     });
 
+builder.Services.AddHttpClient<LazadaApiClient>("Lazada")
+    .ConfigureHttpClient(c => c.Timeout = TimeSpan.FromSeconds(30))
+    .AddStandardResilienceHandler(opts =>
+    {
+        opts.Retry.MaxRetryAttempts = 2;
+        opts.Retry.BackoffType = DelayBackoffType.Exponential;
+        opts.CircuitBreaker.FailureRatio = 0.5;
+        opts.CircuitBreaker.MinimumThroughput = 5;
+        opts.CircuitBreaker.BreakDuration = TimeSpan.FromSeconds(30);
+        opts.Timeout.Timeout = TimeSpan.FromSeconds(30);
+    });
+
+// P3-B01: Lazada API client (HTTP-based, like ShopeeApiClient)
+// AddHttpClient<T> registers both the named HttpClient AND T as the concrete type
+// so the class is available for injection directly (no separate AddSingleton needed)
+
+// P3-B02: Tiki scraper (Playwright-based, like Amazon/Walmart scrapers)
+builder.Services.AddSingleton<IProductScraper, TikiScraper>();
+
 // 5. Quartz.NET job scheduler
 builder.Services.AddQuartz(q =>
 {

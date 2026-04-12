@@ -6,112 +6,148 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 CrossMarket Price Analyzer — a .NET 9 microservices platform that identifies U.S. → Vietnam cross-border trade opportunities by scraping prices from U.S. retail sources and Vietnamese e-commerce platforms, matching products, and scoring opportunities by profit margin.
 
-**Stack:** .NET 9, CQRS + MediatR, EF Core, MySQL, Redis, RabbitMQ/MassTransit, React SPA, YARP API Gateway
+**Stack:** .NET 9, CQRS + MediatR, EF Core, MySQL, Redis, RabbitMQ/MassTransit, React SPA (Vite), YARP API Gateway
 
 ---
 
 ## Common Commands
 
 ```bash
-# Restore + build
+# Build (Debug — default)
 dotnet build CrossMarketAnalyzer.sln
 
-# Test all
+# Build Release
+dotnet build CrossMarketAnalyzer.sln --configuration Release
+
+# Run all tests
 dotnet test CrossMarketAnalyzer.sln
 
-# Test a specific project
+# Run tests for a specific project
 dotnet test tests/ProductService.UnitTests/ProductService.UnitTests.csproj
 
-# Run a specific service
+# Run a specific API service
 dotnet run --project src/Services/ProductService/ProductService.Api
 
-# Run infrastructure containers
+# Start infrastructure containers (MySQL, Redis, RabbitMQ)
 docker compose up -d mysql redis rabbitmq
-
-# EF migrations (run from solution root)
-dotnet ef migrations add <Name> \
-  --project src/Common/Common.Infrastructure \
-  --startup-project src/Services/ProductService/ProductService.Api
 ```
+
+> **Note:** Each service auto-creates its own database on startup via `EnsureCreatedAsync()` (Development). EF migrations are not currently used — the `dotnet ef migrations` command listed in some docs will not work as written.
 
 ---
 
 ## Architecture
 
-### Microservices (each follows DDD layers)
+### Services & Ports
 
-| Service | Port | Purpose |
-|---|---|---|
-| `ProductService.Api` | 5001 | Product catalog, price snapshots, exchange rates |
-| `MatchingService.Api` | 5002 | Fuzzy US↔VN product pairing |
-| `ScoringService.Api` | 5003 | Landed cost calculation, multi-factor scoring |
-| `NotificationService.Api` | 5004 | Alerts, subscriptions, multi-channel delivery |
-| `ScrapingService.Worker` | — | Background scheduled jobs (no HTTP API) |
-| `CMA.Gateway` | 8080 | YARP API Gateway (single entry point) |
+| Service | Port | Database | Purpose |
+|---|---|---|---|
+| `ProductService.Api` | 5001 | `cma_products` | Product catalog, price snapshots, exchange rates |
+| `MatchingService.Api` | 5002 | `cma_matching` | Fuzzy US↔VN product pairing |
+| `ScoringService.Api` | 5003 | `cma_scoring` | Landed cost calculation, multi-factor scoring |
+| `NotificationService.Api` | 5004 | `cma_notifications` | Alerts, subscriptions, multi-channel delivery |
+| `ScrapingService.Worker` | — | `cma_scraping` | Background scheduled jobs (no HTTP API) |
+| `CMA.Gateway` | 8080 | — | YARP API Gateway — single entry point |
+| `CMA.WebApp` | 3000 | — | React SPA (static files via nginx in Docker) |
 
 ### Layer Pattern (same across all services)
 
-Each service follows `Domain → Application → Infrastructure → Api`:
-- **Domain**: Aggregate roots, entities, value objects, enums, domain exceptions
-- **Application**: Commands/Queries (MediatR `IRequest`), Handlers, DTOs, Services, Pipeline Behaviors
-- **Infrastructure**: EF Core DbContext, repositories, external clients (Redis, RabbitMQ)
-- **Api/Worker**: `Program.cs`, Minimal API endpoints or Quartz.NET jobs
+```
+Service/
+├── Domain/           # Entities, value objects, enums, domain exceptions
+├── Application/     # Commands/Queries (MediatR), Handlers, DTOs, Services
+├── Infrastructure/  # EF Core DbContext, repositories, external clients
+├── Contracts/       # (ProductService only) DbContext interface boundary
+└── Api/             # Program.cs, Minimal API endpoints
+```
 
 ### Common Shared Libraries
 
-- **`Common.Domain`**: Shared kernel — `BaseEntity<TId>`, `AuditableEntity`, value objects (`Money`, `Percentage`, `CountryCode`), enums (`ProductSource`, `MatchStatus`, `AlertType`, etc.), `IRepository<T>`, `IUnitOfWork`
-- **`Common.Application`**: Pipeline behaviors (`ValidationBehavior`, `LoggingBehavior`, `CachingBehavior`, `PerfBehavior`), shared interfaces (`ICacheService`, `IEventPublisher`, `IExchangeRateService`), `ServiceCollectionExtensions`
-- **`Common.Infrastructure`**: EF Core `BaseDbContext`, `RedisCacheService`, `RabbitMqEventPublisher`, Serilog config, telemetry
+- **`Common.Domain`**: Shared kernel — `BaseEntity<TId>`, `AuditableEntity`, `Money`, `Percentage`, `CountryCode`, enums (`ProductSource`, `MatchStatus`, `AlertType`), `IRepository<T>`, `IUnitOfWork`. **No infrastructure dependencies.**
 
-### CQRS + MediatR Pattern
+- **`Common.Application`**: Pipeline behaviors (`ValidationBehavior`, `LoggingBehavior`, `CachingBehavior`, `PerfBehavior`), shared interfaces (`ICacheService`, `IEventPublisher`, `IExchangeRateService`), `ServiceCollectionExtensions`.
+
+- **`Common.Infrastructure`**: `BaseDbContext`, `RedisCacheService`, `RabbitMqEventPublisher`, Serilog config, `OpenTelemetry` setup, resilience policies. Key entry points:
+  - `UseCommonLogging()` — called on `builder.Host` to configure Serilog + OpenTelemetry
+  - `AddCommonInfrastructure(config, serviceName)` — called on `builder.Services` to register DB, Redis, RabbitMQ, health checks
+  - `AddCommonApplication()` — called on `builder.Services` to register MediatR + all pipeline behaviors
+  - `AddStandardResilienceHandler()` — Polly retry/circuit-breaker/timeout for `HttpClient`
+
+### CQRS + MediatR
 
 All business logic goes through MediatR:
-- **Commands** (`IRequest<TResponse>`) in `Commands/` folder — writes/modifications
-- **Queries** (`IRequest<TResponse>`) in `Queries/` folder — reads
-- Handlers live in `Handlers/` subfolder alongside their command/query
-- MediatR pipeline: `LoggingBehavior → ValidationBehavior → CachingBehavior → PerfBehavior → Handler`
+- **Commands** (`IRequest<TResponse>`) in `Commands/` — writes
+- **Queries** (`IRequest<TResponse>`) in `Queries/` — reads
+- Handlers live in `Handlers/` alongside their command/query
+- Pipeline order: `LoggingBehavior → ValidationBehavior → CachingBehavior → PerfBehavior → Handler`
 
-### Event-Driven Integration
+### API Endpoints
 
-Services communicate via RabbitMQ + MassTransit. Events (`ProductScrapedEvent`, `MatchCreatedEvent`, `OpportunityScoredEvent`, etc.) are published by services and consumed by downstream workers. Each service configures its own consumers in `Program.cs`.
+All services use **Minimal APIs** (`.MapGet`/`.MapPost`/`.MapPut`/`.MapDelete`) with `.WithTags()`, `.WithName()`, `.WithDescription()` for Swagger. Controllers are not used.
+
+### Scraper Pattern
+
+`ProductService` uses `IProductScraper` implementations in `Infrastructure/Services/ProductScrapers/`:
+- `AmazonScraper`
+- `WalmartScraper`
+- `CigarPageScraper`
+
+`ScraperFactory` selects the correct scraper by URL pattern. Scrape results flow into the `UpsertFromScrapeAsync` service method.
+
+### QuickLookup Flow
+
+`POST /api/products/quick-lookup` chains multiple steps via MediatR:
+1. `QuickLookupCommand` dispatches to `QuickLookupCommandHandler`
+2. Handler calls `ScraperFactory` → scrapes the URL
+3. Handler calls `MatchingService` (HTTP client) to find VN matches
+4. Returns `QuickLookupResultDto`
 
 ### Database Strategy
 
-Each service has its own schema/database in MySQL (separate `cma_products`, `cma_matching`, `cma_scoring`, `cma_notifications`, `cma_scraping` databases). Infrastructure migrations live in `Common.Infrastructure`.
+Each service has its own **MySQL database** (not schema). Databases are created on container startup via `MYSQL_DATABASE` env vars. `EnsureCreatedAsync()` creates tables on first run in Development.
+
+### Event-Driven Integration
+
+Services communicate via RabbitMQ + MassTransit. Events are defined in each service's Application layer and consumed downstream. Each service registers its own consumers in `Program.cs`.
 
 ---
 
 ## Key Patterns
 
-- **Aggregate Root**: `Product`, `ProductMatch`, `OpportunityScore`, `Alert` — each owns its consistency boundary
-- **Repository**: `IProductRepository`, `IMatchRepository` — abstractions over EF Core, defined in Domain, implemented in Infrastructure
+- **Aggregate Root**: `Product`, `ProductMatch`, `OpportunityScore`, `Alert` — owns its consistency boundary
+- **Repository**: `IProductRepository` (defined in Domain, implemented in Infrastructure)
 - **Specification**: Reusable query filters (e.g., `ConfirmedMatchSpecification`)
 - **Factory**: `OpportunityScoreFactory.Create()` for complex object construction
 - **Value Objects**: `Money` (amount + currency), `Percentage` — immutable, equality by value
-- **Polly**: Retry and circuit breaker on RabbitMQ, database, and external API calls
+- **Polly**: Retry and circuit breaker on `HttpClient`s, RabbitMQ, and database calls
+- **IProductDbContext**: `ProductService` uses a `Contracts/Persistence/IProductDbContext.cs` interface boundary over `ProductDbContext` — inject this for persistence abstractions
 
 ---
 
 ## Data Flow
 
 ```
-ScrapingService.Worker (scheduled jobs)
-  → scrapes Amazon/Walmart/Shopee
-  → ProductService (saves product + price snapshot)
-  → publishes ProductScrapedEvent
+ScrapingService.Worker (Quartz.NET scheduled jobs)
+  → scrapers (Playwright-based: Amazon, Walmart, CigarPage)
+  → ProductService.Api POST /api/products/upsert-from-scrape
+  → saves product + price snapshot
+  → publishes ProductScrapedEvent (RabbitMQ)
+
   → ScrapingService.Worker (LandedCostRecalcJob)
   → ScoringService (saves opportunity score)
-  → publishes MatchCreatedEvent / OpportunityScoredEvent
+  → publishes OpportunityScoredEvent
   → NotificationService (checks thresholds, sends alerts)
-  → CMA.Gateway → React SPA (polling + WebSocket)
+
+CMA.Gateway (YARP) → React SPA
 ```
 
 ---
 
 ## Important Conventions
 
-- **`dotnet format`** is not used — code style is enforced by editor config only
-- Migrations are added via `dotnet ef` CLI targeting `Common.Infrastructure` with the API project as startup
-- Each service's `Program.cs` registers its own DI: domain interfaces → infrastructure implementations
-- ScrapingService has no HTTP API — it's purely a `BackgroundService` / Quartz.NET worker
-- Frontend is in `src/Apps/CMA.WebApp` (React + Vite) but is currently scaffolded; main entry is via gateway on port 8080
+- **`dotnet format`** is not used — style is enforced by `.editorconfig` only
+- **No EF migrations** — each service uses `db.Database.EnsureCreatedAsync()` in development
+- Each `Program.cs` wires its own DI: domain interfaces → infrastructure implementations
+- `ScrapingService.Worker` is purely `BackgroundService` / Quartz.NET — no HTTP API
+- Frontend is in `src/Apps/CMA.WebApp` (React + Vite) but served as static files in Docker
+- Docker healthchecks use `infrastructure/docker/healthcheck.sh` — a simple HTTP health probe

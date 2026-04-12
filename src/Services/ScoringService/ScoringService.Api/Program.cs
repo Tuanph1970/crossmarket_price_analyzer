@@ -4,9 +4,11 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ScoringService.Application.Commands;
 using ScoringService.Application.DTOs;
-using ScoringService.Application.Queries;
 using ScoringService.Application.Persistence;
+using ScoringService.Application.Queries;
 using ScoringService.Application.Services;
+using ScoringService.Api.WebSockets;
+using ScoringService.Infrastructure.WebSockets;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -35,6 +37,20 @@ builder.Services.AddDbContext<ScoringDbContext>(options =>
 builder.Services.AddScoped<ScoringEngine>();
 builder.Services.AddScoped<LandedCostCalculator>();
 
+// ── Phase 3 services ─────────────────────────────────────────────────────────
+builder.Services.AddHttpClient();                                      // IHttpClientFactory for PriceStabilityService
+builder.Services.AddHttpClient("ProductService");                      // ProductService HTTP client
+builder.Services.AddSingleton<IHsCodeClassifier, HsCodeClassifier>();
+builder.Services.AddSingleton<ITariffService, TariffService>();
+builder.Services.AddScoped<IPriceStabilityService, PriceStabilityService>();
+builder.Services.AddSingleton<IShippingService, ShippingService>();
+builder.Services.AddSingleton<IExcelExportService, ExcelExportService>();
+
+// WebSocket background handler
+builder.Services.AddSingleton<IOpportunityWebSocketHandler, OpportunityWebSocketHandler>();
+builder.Services.AddHostedService(sp => (OpportunityWebSocketHandler)
+    sp.GetRequiredService<IOpportunityWebSocketHandler>());
+
 // MediatR
 builder.Services.AddMediatR(cfg =>
     cfg.RegisterServicesFromAssemblyContaining<CalculateScoreCommand>());
@@ -50,6 +66,9 @@ if (app.Environment.IsDevelopment())
 
 app.UseSwagger();
 app.UseSwaggerUI();
+
+// WebSocket endpoint (/ws/opportunities — see WebSocketMiddleware)
+app.UseOpportunityWebSockets();
 
 // GET /api/scores — ranked opportunity scores
 app.MapGet("/api/scores", async (
@@ -215,10 +234,119 @@ app.MapPost("/api/scores/recalculate", async (ScoringDbContext db, CancellationT
 .WithName("RecalculateAllScores")
 .WithDescription("Triggers a full recalculation of all opportunity scores.");
 
-app.MapGet("/health", () => Results.Ok(new { Status = "Healthy", Service = "ScoringService", Timestamp = DateTime.UtcNow }))
-   .WithTags("Health")
-   .WithName("HealthCheck")
-   .WithDescription("Returns the health status of the ScoringService.");
+// ── Phase 3: WebSocket health ────────────────────────────────────────────────
+app.MapGet("/api/scores/websocket/health", (
+    IOpportunityWebSocketHandler handler) =>
+{
+    var states = handler.GetConnectionStates();
+    var openCount = states.Count(kvp => kvp.Value == System.Net.WebSockets.WebSocketState.Open);
+    return Results.Ok(new
+    {
+        Status = "Healthy",
+        TotalConnections = handler.ConnectionCount,
+        OpenConnections = openCount,
+        ClosedOrAbnormal = handler.ConnectionCount - openCount,
+        Timestamps = DateTime.UtcNow,
+    });
+})
+.Produces(StatusCodes.Status200OK)
+.WithTags("WebSocket")
+.WithName("WebSocketHealth")
+.WithDescription("Returns the health status of the WebSocket server including connection counts.");
+
+// ── Phase 3: Excel export ─────────────────────────────────────────────────────
+app.MapPost("/api/scores/export/excel", async (
+    ExcelExportRequest request,
+    ScoringDbContext db,
+    IOpportunityWebSocketHandler wsHandler,
+    IExcelExportService excelService,
+    CancellationToken ct) =>
+{
+    var scores = await db.OpportunityScores
+        .OrderByDescending(s => s.CompositeScore)
+        .Take(request.Limit > 0 ? request.Limit : 1000)
+        .ToListAsync(ct);
+
+    var rows = scores.Select(s => new OpportunityExportRow(
+        UsProductName: s.MatchId.ToString(), // match label, real names come from MatchingService
+        VnProductName: s.MatchId.ToString(),
+        UsPriceUsd: null,
+        VnPriceVnd: null,
+        LandedCostVnd: s.LandedCostVnd,
+        VietnamRetailVnd: s.VietnamRetailVnd,
+        ProfitMarginPct: s.ProfitMarginPct,
+        RoiPct: s.VietnamRetailVnd > 0 && s.LandedCostVnd > 0
+            ? Math.Round((s.VietnamRetailVnd - s.LandedCostVnd) / s.LandedCostVnd * 100m, 2)
+            : 0m,
+        CompositeScore: s.CompositeScore,
+        DemandScore: s.DemandScore,
+        CompetitionScore: s.CompetitionScore,
+        PriceStabilityScore: s.PriceStabilityScore,
+        MatchConfidenceScore: s.MatchConfidenceScore,
+        CalculatedAt: s.CalculatedAt
+    )).ToList();
+
+    var exportRequest = new ExportRequest(
+        Title: request.Title ?? "Opportunity Scores Export",
+        Rows: rows);
+
+    var bytes = await excelService.ExportOpportunitiesAsync(exportRequest, ct);
+
+    // Broadcast a delta update to all connected clients
+    if (wsHandler.ConnectionCount > 0)
+    {
+        var broadcast = new OpportunityBroadcast<object>(
+            Type: "export_completed",
+            Payload: new { RecordCount = rows.Count, At = DateTime.UtcNow },
+            TimestampUtc: DateTime.UtcNow);
+        _ = wsHandler.BroadcastAsync(broadcast, ct);
+    }
+
+    return Results.File(
+        bytes,
+        contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        fileDownloadName: $"opportunities-{DateTime.UtcNow:yyyyMMdd-HHmmss}.xlsx");
+})
+.Produces(StatusCodes.Status200OK, contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+.WithTags("Export")
+.WithName("ExportToExcel")
+.WithDescription("Exports all opportunity scores to a formatted Excel workbook with Summary, Opportunities, and Top 20 sheets.");
+
+// ── Phase 3: trigger manual broadcast ─────────────────────────────────────────
+app.MapPost("/api/scores/broadcast", async (
+    ScoringDbContext db,
+    IOpportunityWebSocketHandler wsHandler,
+    CancellationToken ct) =>
+{
+    var top20 = await db.OpportunityScores
+        .OrderByDescending(s => s.CompositeScore)
+        .Take(20)
+        .Select(s => new SnapshotItemDto(
+            s.MatchId, s.CompositeScore, s.ProfitMarginPct,
+            s.DemandScore, s.CompetitionScore, s.PriceStabilityScore,
+            s.MatchConfidenceScore, s.LandedCostVnd, s.VietnamRetailVnd))
+        .ToListAsync(ct);
+
+    var snapshot = new OpportunitySnapshotDto(top20, DateTime.UtcNow);
+    var broadcast = new OpportunityBroadcast<OpportunitySnapshotDto>(
+        Type: "full_snapshot",
+        Payload: snapshot,
+        TimestampUtc: DateTime.UtcNow);
+
+    await wsHandler.BroadcastAsync(broadcast, ct);
+
+    return Results.Ok(new
+    {
+        BroadcastType = "full_snapshot",
+        SentTo = wsHandler.ConnectionCount,
+        SnapshotCount = top20.Count,
+        At = DateTime.UtcNow,
+    });
+})
+.Produces(StatusCodes.Status200OK)
+.WithTags("WebSocket")
+.WithName("BroadcastSnapshot")
+.WithDescription("Manually triggers a top-20 snapshot broadcast to all connected WebSocket clients.");
 
 // P2-B06: PUT /api/scores/manual-costs — store manual landed-cost overrides for a match
 app.MapPut("/api/scores/manual-costs", async (

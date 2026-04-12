@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Download, TrendingUp } from 'lucide-react';
+import { Download, TrendingUp, Wifi, WifiOff } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
 import { MetricCard } from '@/components/ui/MetricCard';
 import { Button } from '@/components/ui/Button';
@@ -11,12 +11,21 @@ import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
 import { useDashboardMetrics } from '@/hooks/useOpportunities';
 import { useScores } from '@/hooks/useScores';
 import { useFilterStore } from '@/store/filterStore';
+import { useRealtimeOpportunities } from '@/hooks/useRealtimeOpportunities';
+import { MarginBarChart } from '@/components/shared/MarginBarChart';
+import { ScoreRadarChart } from '@/components/shared/ScoreRadarChart';
+import { scoringApi } from '@/api/scoringApi';
 import { keepPreviousData } from '@tanstack/react-query';
 
 export default function DashboardPage() {
   const { t } = useTranslation();
   const [page, setPage] = useState(1);
+  const [selectedOpp, setSelectedOpp] = useState(null);
+  const [isExporting, setIsExporting] = useState(false);
   const filters = useFilterStore();
+
+  // P3-F02: Merge real-time WebSocket updates into the scores cache
+  const { isConnected } = useRealtimeOpportunities(20);
 
   const { data: metrics, isLoading: metricsLoading } = useDashboardMetrics({
     minMargin: filters.minMargin || undefined,
@@ -41,24 +50,31 @@ export default function DashboardPage() {
     }
   }, [items.length, scoresLoading]);
 
-  const handleExportCSV = useCallback(() => {
-    const rows = [
-      ['MatchId', 'CompositeScore', 'ProfitMargin%', 'Demand', 'Competition', 'Stability', 'Confidence', 'LandedCostVND', 'RetailVND'],
-      ...items.map(s => [
-        s.matchId ?? '', s.compositeScore ?? 0, s.profitMarginPct ?? 0,
-        s.demandScore ?? 0, s.competitionScore ?? 0, s.priceStabilityScore ?? 0,
-        s.matchConfidenceScore ?? 0, s.landedCostVnd ?? 0, s.vietnamRetailVnd ?? 0,
-      ]),
-    ];
-    const csv = rows.map(r => r.join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url;
-    a.download = `opportunities-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click(); URL.revokeObjectURL(url);
-  }, [items]);
+  // P3-F06: Excel export
+  const handleExportExcel = useCallback(async () => {
+    setIsExporting(true);
+    try {
+      const response = await scoringApi.exportToExcel({
+        title: `CrossMarket Export ${new Date().toISOString().slice(0, 10)}`,
+        limit: 0,
+      });
+      const blob = new Blob([response.data], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `cma-opportunities-${Date.now()}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Excel export failed:', err);
+    } finally {
+      setIsExporting(false);
+    }
+  }, []);
 
-  const handlePrev = useCallback(() => setPage(p => p - 1), []);
+  const handlePrev = useCallback(() => setPage(p => Math.max(1, p - 1)), []);
   const handleNext = useCallback(() => setPage(p => p + 1), []);
 
   return (
@@ -69,7 +85,21 @@ export default function DashboardPage() {
         Skip to opportunities
       </a>
 
-      <h1 className="text-2xl font-bold text-text-primary mb-6">{t('dashboard.title')}</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold text-text-primary">{t('dashboard.title')}</h1>
+        {/* P3-F01: Real-time connection indicator */}
+        <div
+          className="flex items-center gap-1.5 text-sm text-text-muted"
+          aria-live="polite"
+          aria-label={isConnected ? 'Real-time updates connected' : 'Real-time updates disconnected'}
+        >
+          {isConnected
+            ? <Wifi className="w-4 h-4 text-green-500" aria-hidden="true" />
+            : <WifiOff className="w-4 h-4 text-text-muted" aria-hidden="true" />}
+          <span className="sr-only">{isConnected ? 'Connected' : 'Disconnected'}</span>
+          <span className="hidden sm:inline">{isConnected ? 'Live' : 'Polling'}</span>
+        </div>
+      </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
         <MetricCard
@@ -97,16 +127,41 @@ export default function DashboardPage() {
         />
       </div>
 
+      {/* P3-F04 & P3-F05: Charts — show only when there is data */}
+      {items.length > 0 && (
+        <div className="grid gap-6 lg:grid-cols-2 mb-8">
+          <div className="bg-bg-secondary border border-border rounded-lg p-4">
+            <h2 className="text-sm font-semibold text-text-primary mb-3">
+              {t('dashboard.marginChart.title', 'Top 10 by Profit Margin')}
+            </h2>
+            <MarginBarChart scores={items} />
+          </div>
+          <div className="bg-bg-secondary border border-border rounded-lg p-4">
+            <h2 className="text-sm font-semibold text-text-primary mb-3">
+              {t('dashboard.radarChart.title', 'Score Breakdown —')}{' '}
+              {selectedOpp
+                ? `#${selectedOpp.matchId?.slice(0, 8)}`
+                : t('dashboard.radarChart.select', 'select an opportunity below')}
+            </h2>
+            <ScoreRadarChart score={selectedOpp ?? items[0]} />
+          </div>
+        </div>
+      )}
+
       {/* Filter Bar */}
       <div className="flex flex-wrap gap-3 mb-6">
         <FilterBar />
+        {/* P3-F06: Replaced CSV with Excel export */}
         <Button
           variant="outline"
-          onClick={handleExportCSV}
-          aria-label="Export opportunities to CSV"
+          onClick={handleExportExcel}
+          disabled={isExporting}
+          aria-label={isExporting ? 'Exporting to Excel' : 'Export opportunities to Excel'}
         >
           <Download className="w-4 h-4 mr-1.5 inline" aria-hidden="true" />
-          {t('common.export', 'Export CSV')}
+          {isExporting
+            ? t('dashboard.exporting', 'Exporting…')
+            : t('dashboard.exportExcel', 'Export Excel')}
         </Button>
       </div>
 
@@ -140,7 +195,16 @@ export default function DashboardPage() {
             actionLabel={t('dashboard.filterBar.resetFilters', 'Reset Filters')}
           />
         ) : items.map((score) => (
-          <OpportunityCard key={score.id ?? score.matchId} score={score} />
+          <div
+            key={score.id ?? score.matchId}
+            role="button"
+            tabIndex={0}
+            onClick={() => setSelectedOpp(score)}
+            onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setSelectedOpp(score)}
+            aria-pressed={selectedOpp?.matchId === score.matchId}
+          >
+            <OpportunityCard score={score} />
+          </div>
         ))}
       </div>
 

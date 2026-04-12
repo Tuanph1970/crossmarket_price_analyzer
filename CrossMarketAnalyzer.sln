@@ -41,6 +41,16 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NotificationService.Infrast
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NotificationService.Api", "src\Services\NotificationService\NotificationService.Api\NotificationService.Api.csproj", "{A5000004-0000-0000-0000-000000000004}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CrossMarket.SharedKernel", "src\Services\AuthService\CrossMarket.SharedKernel\CrossMarket.SharedKernel.csproj", "{D2000001-0000-0000-0000-000000000001}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AuthService.Domain", "src\Services\AuthService\AuthService.Domain\AuthService.Domain.csproj", "{D1000001-0000-0000-0000-000000000001}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AuthService.Application", "src\Services\AuthService\AuthService.Application\AuthService.Application.csproj", "{D1000002-0000-0000-0000-000000000002}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AuthService.Infrastructure", "src\Services\AuthService\AuthService.Infrastructure\AuthService.Infrastructure.csproj", "{D1000003-0000-0000-0000-000000000003}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AuthService.Api", "src\Services\AuthService\AuthService.Api\AuthService.Api.csproj", "{D1000004-0000-0000-0000-000000000004}"
+EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ScrapingService.Domain", "src\Services\ScrapingService\ScrapingService.Domain\ScrapingService.Domain.csproj", "{A6000001-0000-0000-0000-000000000001}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ScrapingService.Application", "src\Services\ScrapingService\ScrapingService.Application\ScrapingService.Application.csproj", "{A6000002-0000-0000-0000-000000000002}"
@@ -64,6 +74,8 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ScoringService.IntegrationTests", "tests\ScoringService.IntegrationTests\ScoringService.IntegrationTests.csproj", "{C0000007-0000-0000-0000-000000000007}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Common.IntegrationTests", "tests\Common\Common.IntegrationTests.csproj", "{C0000008-0000-0000-0000-000000000008}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AuthService.Tests", "tests\AuthService.Tests\AuthService.Tests.csproj", "{C0000009-0000-0000-0000-000000000009}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{827E0CD3-B72D-47B6-A68D-7590B98EB39B}"
 EndProject

@@ -62,3 +62,14 @@ public record PaginatedScoresDto(
 public record UpdateWeightsRequest(
     List<ScoringConfigItemDto> Weights
 );
+
+/// <summary>
+/// P3: Request body for POST /api/scores/export/excel.
+/// Controls the title and row limit of the exported workbook.
+/// </summary>
+public record ExcelExportRequest(
+    /// <summary>Sheet/workbook title. Defaults to "Opportunity Scores Export".</summary>
+    string? Title = null,
+    /// <summary>Maximum number of rows to export. Defaults to all (0 = unlimited). Use 20 for a Top-20 export.</summary>
+    int Limit = 0
+);

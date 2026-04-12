@@ -1,14 +1,17 @@
 import { useTranslation } from 'react-i18next';
 import { useParams, Link } from 'react-router-dom';
-import { GitCompare } from 'lucide-react';
+import { GitCompare, FileDown } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
+import { AddToWatchlistButton } from '@/components/shared/AddToWatchlistButton';
+import { downloadOpportunityReport } from '@/api/notificationApi';
 import { useScoreBreakdown } from '@/hooks/useScores';
 import { useMatch } from '@/hooks/useMatches';
 import { useScores } from '@/hooks/useScores';
+import { toast } from 'sonner';
 
 function ScoreFactorRow({ label, raw, weight, normalized, weighted }) {
   const pct = Math.round(normalized ?? 0);
@@ -41,6 +44,13 @@ export default function ComparisonPage() {
   const { data: match } = useMatch(matchId);
   const { data: scoresData } = useScores({ pageSize: 100 });
 
+  const handleExportPdf = () => {
+    if (!matchId) return;
+    downloadOpportunityReport({ matchId })
+      .then(() => toast.success('PDF report downloaded'))
+      .catch(() => toast.error('Failed to download PDF report'));
+  };
+
   const getLabel = (key) => {
     const i18nKey = FACTOR_LABELS[key] ?? key.toLowerCase();
     return t(`comparison.${i18nKey}`, i18nKey);
@@ -49,7 +59,15 @@ export default function ComparisonPage() {
   return (
     <ErrorBoundary>
     <PageContainer>
-      <h1 className="text-2xl font-bold text-text-primary mb-6">{t('comparison.title')}</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold text-text-primary">{t('comparison.title')}</h1>
+        {matchId && (
+          <Button variant="outline" size="sm" onClick={handleExportPdf}>
+            <FileDown className="w-4 h-4 mr-2" />
+            Export PDF
+          </Button>
+        )}
+      </div>
 
       {matchId ? (
         breakdown ? (
@@ -58,9 +76,18 @@ export default function ComparisonPage() {
             <Card className="p-6">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-lg font-semibold">{t('comparison.compositeScore')}</h2>
-                <span className="text-3xl font-bold text-primary">
-                  {breakdown.compositeScore?.toFixed(1) ?? '—'}
-                </span>
+                <div className="flex items-center gap-3">
+                  <span className="text-3xl font-bold text-primary">
+                    {breakdown.compositeScore?.toFixed(1) ?? '—'}
+                  </span>
+                  {/* P4-F05: Watch button on comparison page */}
+                  <AddToWatchlistButton
+                    matchId={matchId}
+                    usProductName={match?.usProductName}
+                    vnProductName={match?.vietnamProductName}
+                    size="sm"
+                  />
+                </div>
               </div>
               <div className="space-y-1">
                 {(breakdown.factors ?? []).map((f) => (

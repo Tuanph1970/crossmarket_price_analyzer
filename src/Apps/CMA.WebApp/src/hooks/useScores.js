@@ -13,6 +13,7 @@ export function useScores(params = {}, options = {}) {
   return useQuery({
     queryKey: SCORING_KEYS.list(params),
     queryFn: () => scoringApi.getScores(params).then(r => r.data),
+    staleTime: 30_000,  // P3: 30s stale time — WebSocket pushes keep cache fresh
     placeholderData: keepPreviousData,
     ...options,
   });
