@@ -23,8 +23,18 @@ export default {
         danger:  { DEFAULT: '#DC2626', 50: '#FEF2F2', 100: '#FEE2E2', 500: '#DC2626', 600: '#B91C1C' },
         background: '#F9FAFB',
         surface: '#FFFFFF',
+        // semantic color aliases used throughout the codebase
+        bg: {
+          primary:   '#F9FAFB',
+          secondary: '#FFFFFF',
+          tertiary:  '#F3F4F6',
+        },
+        border: {
+          DEFAULT:   '#E5E7EB',
+          primary:   '#DBEAFE',
+        },
         'text-primary': '#111827',
-        'text-muted': '#6B7280',
+        'text-muted':  '#6B7280',
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
