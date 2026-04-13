@@ -1,4 +1,5 @@
 using Common.Application.Extensions;
+using Common.Application.Interfaces;
 using Common.Infrastructure.Configuration;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -20,7 +21,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new() { Title = "ScoringService API", Version = "v1" });
-    var xmlFile = $"{typeof(ScoringService.Api.Program).Assembly.GetName().Name}.xml";
+    var xmlFile = $"{typeof(Program).Assembly.GetName().Name}.xml";
     var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
     if (File.Exists(xmlPath))
         c.IncludeXmlComments(xmlPath);

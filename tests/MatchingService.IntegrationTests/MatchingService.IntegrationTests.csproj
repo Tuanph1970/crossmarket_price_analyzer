@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Services\MatchingService\MatchingService.Api\MatchingService.Api.csproj" />
+    <ProjectReference Include="..\Common\Common.IntegrationTests.csproj" />
   </ItemGroup>
 
 </Project>

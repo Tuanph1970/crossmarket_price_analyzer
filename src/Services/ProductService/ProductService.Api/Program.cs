@@ -2,11 +2,9 @@ using Common.Application.Extensions;
 using Common.Application.Interfaces;
 using Common.Domain.Scraping;
 using Common.Infrastructure.Configuration;
-using Common.Infrastructure.Resilience;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ApiExplorer;
 using Microsoft.EntityFrameworkCore;
-using Polly;
-using Polly.ExtensionsHttp;
 using ProductService.Application.Commands;
 using ProductService.Application.DTOs;
 using ProductService.Application.Services;
@@ -22,7 +20,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new() { Title = "ProductService API", Version = "v1" });
-    var xmlFile = $"{typeof(ProductService.Api.Program).Assembly.GetName().Name}.xml";
+    var xmlFile = $"{typeof(Program).Assembly.GetName().Name}.xml";
     var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
     if (File.Exists(xmlPath))
         c.IncludeXmlComments(xmlPath);
@@ -48,15 +46,7 @@ builder.Services.AddScoped<IProductDbContext>(sp => sp.GetRequiredService<Produc
 // 5. HTTP clients — with Polly resilience
 builder.Services.AddHttpClient("ExchangeRate")
     .ConfigureHttpClient(c => c.Timeout = TimeSpan.FromSeconds(30))
-    .AddStandardResilienceHandler(opts =>
-    {
-        opts.Retry.MaxRetryAttempts = 3;
-        opts.Retry.BackoffType = DelayBackoffType.Exponential;
-        opts.CircuitBreaker.FailureRatio = 0.5;
-        opts.CircuitBreaker.MinimumThroughput = 5;
-        opts.CircuitBreaker.BreakDuration = TimeSpan.FromSeconds(30);
-        opts.Timeout.Timeout = TimeSpan.FromSeconds(30);
-    });
+    .AddCmaStandardResilienceHandler();
 
 // 6. Register scrapers (IProductScraper implementations)
 builder.Services.AddSingleton<IProductScraper, AmazonScraper>();
@@ -104,7 +94,7 @@ app.MapGet("/api/products", async (
     var result = await svc.GetProductsAsync(page, pageSize, src, categoryId, isActive, ct);
     return Results.Ok(result);
 })
-.Produces<ProductPagedResultDto>(StatusCodes.Status200OK)
+.Produces<PaginatedProductsDto>(StatusCodes.Status200OK)
 .WithTags("Products")
 .WithName("GetProducts")
 .WithDescription("Returns a paginated list of products with optional filtering by source, category, and active status.");
@@ -135,7 +125,6 @@ app.MapPost("/api/products", async (
     return Results.Created($"/api/products/{result.Id}", result);
 })
 .Produces<ProductDto>(StatusCodes.Status201Created)
-.ProducesValidationProblems()
 .WithTags("Products")
 .WithName("CreateProduct")
 .WithDescription("Creates a new product record.");
@@ -153,7 +142,6 @@ app.MapPut("/api/products/{id:guid}", async (
 })
 .Produces<ProductDto>(StatusCodes.Status200OK)
 .Produces(StatusCodes.Status404NotFound)
-.ProducesValidationProblems()
 .WithTags("Products")
 .WithName("UpdateProduct")
 .WithDescription("Updates an existing product by its unique identifier.");
@@ -188,7 +176,6 @@ app.MapPost("/api/products/upsert-from-scrape", async (
     return Results.Ok(result);
 })
 .Produces<ProductDto>(StatusCodes.Status200OK)
-.ProducesValidationProblems()
 .WithTags("Scraping")
 .WithName("UpsertProductFromScrape")
 .WithDescription("Upserts a product from scraped data (used by the scraping worker).");
@@ -205,7 +192,6 @@ app.MapPost("/api/products/quick-lookup", async (
     return Results.Ok(result);
 })
 .Produces<QuickLookupResultDto>(StatusCodes.Status200OK)
-.ProducesValidationProblems()
 .WithTags("Products")
 .WithName("QuickLookup")
 .WithDescription("Scrapes a source URL and returns matching Vietnam products with scores.");

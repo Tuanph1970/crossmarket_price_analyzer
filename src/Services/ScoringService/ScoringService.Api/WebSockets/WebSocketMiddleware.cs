@@ -1,5 +1,7 @@
 using System.Net.WebSockets;
 using System.Text;
+using Common.Application.Interfaces;
+using Microsoft.EntityFrameworkCore;
 using ScoringService.Infrastructure.WebSockets;
 
 namespace ScoringService.Api.WebSockets;
@@ -36,13 +38,7 @@ public sealed class WebSocketMiddleware
         try
         {
             // Perform the WebSocket upgrade
-            var wsOptions = new WebSocketOptions
-            {
-                KeepAliveInterval = TimeSpan.FromMinutes(2),
-                SubProtocols = new[] { "cma-v1" },
-            };
-
-            socket = await context.WebSockets.AcceptWebSocketAsync(wsOptions);
+            socket = await context.WebSockets.AcceptWebSocketAsync(subprotocol: null);
             connectionId = handler.AddConnection(socket);
 
             _logger.LogInformation(
@@ -52,7 +48,7 @@ public sealed class WebSocketMiddleware
             // Send initial top-20 snapshot immediately on connect
             await SendInitialSnapshotAsync(context.RequestServices, handler, connectionId, CancellationToken.None);
 
-            // Receive loop — client sends nothing, but we handle close/ping frames gracefully
+            // Receive loop — client sends nothing, but we handle close frames gracefully
             var buffer = new byte[16 * 1024];
             while (socket.State == WebSocketState.Open)
             {
@@ -73,17 +69,6 @@ public sealed class WebSocketMiddleware
                         case WebSocketMessageType.Text:
                         case WebSocketMessageType.Binary:
                             // Client should not send data — ignore and stay open
-                            break;
-
-                        case WebSocketMessageType.Ping:
-                            if (socket.State == WebSocketState.Open)
-                            {
-                                await socket.SendAsync(
-                                    new ArraySegment<byte>(buffer, 0, 0),
-                                    WebSocketMessageType.Pong,
-                                    endOfMessage: true,
-                                    CancellationToken.None);
-                            }
                             break;
                     }
                 }

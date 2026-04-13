@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ScoringService.Application\ScoringService.Application.csproj" />
+    <ProjectReference Include="..\ScoringService.Infrastructure\ScoringService.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>
