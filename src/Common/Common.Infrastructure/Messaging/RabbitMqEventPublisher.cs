@@ -1,6 +1,6 @@
 using Common.Application.Interfaces;
 using Common.Domain.Interfaces;
-using Common.Infrastructure.Messaging.Outbox;
+using Common.Domain.Messaging.Outbox;
 using MassTransit;
 using Microsoft.Extensions.Logging;
 using Polly;

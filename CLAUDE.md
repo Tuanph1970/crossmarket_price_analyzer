@@ -6,11 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 CrossMarket Price Analyzer — a .NET 9 microservices platform that identifies U.S. → Vietnam cross-border trade opportunities by scraping prices from U.S. retail sources and Vietnamese e-commerce platforms, matching products, and scoring opportunities by profit margin.
 
-**Stack:** .NET 9, CQRS + MediatR, EF Core, MySQL, Redis, RabbitMQ/MassTransit, React SPA (Vite), YARP API Gateway
+**Stack:** .NET 9, CQRS + MediatR, EF Core, MySQL, Redis, RabbitMQ/MassTransit, YARP API Gateway, React SPA (Vite)
 
 ---
 
-## Common Commands
+## Commands
 
 ```bash
 # Build (Debug — default)
@@ -25,14 +25,23 @@ dotnet test CrossMarketAnalyzer.sln
 # Run tests for a specific project
 dotnet test tests/ProductService.UnitTests/ProductService.UnitTests.csproj
 
-# Run a specific API service
+# Run a specific API service (port 5001)
 dotnet run --project src/Services/ProductService/ProductService.Api
 
-# Start infrastructure containers (MySQL, Redis, RabbitMQ)
+# Start infrastructure only (MySQL, Redis, RabbitMQ)
 docker compose up -d mysql redis rabbitmq
+
+# Start full stack (all containers)
+docker compose up -d
+
+# Start full stack with observability (Prometheus + Grafana)
+docker compose --profile observability up -d
+
+# Frontend dev
+cd src/Apps/CMA.WebApp && npm install && npm run dev
 ```
 
-> **Note:** Each service auto-creates its own database on startup via `EnsureCreatedAsync()` (Development). EF migrations are not currently used — the `dotnet ef migrations` command listed in some docs will not work as written.
+> Each service auto-creates its own database on startup via `EnsureCreatedAsync()`. **EF migrations are not used.**
 
 ---
 
@@ -47,27 +56,30 @@ docker compose up -d mysql redis rabbitmq
 | `ScoringService.Api` | 5003 | `cma_scoring` | Landed cost calculation, multi-factor scoring |
 | `NotificationService.Api` | 5004 | `cma_notifications` | Alerts, subscriptions, multi-channel delivery |
 | `ScrapingService.Worker` | — | `cma_scraping` | Background scheduled jobs (no HTTP API) |
-| `CMA.Gateway` | 8080 | — | YARP API Gateway — single entry point |
+| `AuthService` | — | — | Auth/identity (Domain + Application + Infrastructure + Api) |
+| `CMA.Gateway` | 8080 | — | YARP API Gateway — single entry point for all services |
 | `CMA.WebApp` | 3000 | — | React SPA (static files via nginx in Docker) |
 
-### Layer Pattern (same across all services)
+### Layer Pattern (per service)
 
 ```
 Service/
 ├── Domain/           # Entities, value objects, enums, domain exceptions
 ├── Application/     # Commands/Queries (MediatR), Handlers, DTOs, Services
 ├── Infrastructure/  # EF Core DbContext, repositories, external clients
-├── Contracts/       # (ProductService only) DbContext interface boundary
+├── Contracts/       # (ProductService only) — IProductDbContext interface boundary
 └── Api/             # Program.cs, Minimal API endpoints
 ```
 
+The `Contracts/` layer in ProductService exposes `IProductDbContext` (not the concrete `ProductDbContext`) so consumers of the service don't depend on EF Core internals.
+
 ### Common Shared Libraries
 
-- **`Common.Domain`**: Shared kernel — `BaseEntity<TId>`, `AuditableEntity`, `Money`, `Percentage`, `CountryCode`, enums (`ProductSource`, `MatchStatus`, `AlertType`), `IRepository<T>`, `IUnitOfWork`. **No infrastructure dependencies.**
+- **`Common.Domain`**: Shared kernel — `BaseEntity<TId>`, `AuditableEntity`, `Money`, `Percentage`, `CountryCode`, enums (`ProductSource`, `MatchStatus`, `AlertType`, `ConfidenceLevel`, `DeliveryChannel`), `IRepository<T>`, `IUnitOfWork`. **No infrastructure dependencies.**
 
-- **`Common.Application`**: Pipeline behaviors (`ValidationBehavior`, `LoggingBehavior`, `CachingBehavior`, `PerfBehavior`), shared interfaces (`ICacheService`, `IEventPublisher`, `IExchangeRateService`), `ServiceCollectionExtensions`.
+- **`Common.Application`**: Pipeline behaviors (`ValidationBehavior`, `LoggingBehavior`, `CachingBehavior`, `PerfBehavior`), shared interfaces (`ICacheService`, `IEventPublisher`, `IExchangeRateService`, `IScraperFactory`, `IRotatingProxyService`, `IOpportunityWebSocketHandler`), `ServiceCollectionExtensions`.
 
-- **`Common.Infrastructure`**: `BaseDbContext`, `RedisCacheService`, `RabbitMqEventPublisher`, Serilog config, `OpenTelemetry` setup, resilience policies. Key entry points:
+- **`Common.Infrastructure`**: `BaseDbContext`, `RedisCacheService`, `RabbitMqEventPublisher`, `OutboxProcessor`, Serilog config, OpenTelemetry setup, Polly resilience policies. Key entry points:
   - `UseCommonLogging()` — called on `builder.Host` to configure Serilog + OpenTelemetry
   - `AddCommonInfrastructure(config, serviceName)` — called on `builder.Services` to register DB, Redis, RabbitMQ, health checks
   - `AddCommonApplication()` — called on `builder.Services` to register MediatR + all pipeline behaviors
@@ -81,9 +93,7 @@ All business logic goes through MediatR:
 - Handlers live in `Handlers/` alongside their command/query
 - Pipeline order: `LoggingBehavior → ValidationBehavior → CachingBehavior → PerfBehavior → Handler`
 
-### API Endpoints
-
-All services use **Minimal APIs** (`.MapGet`/`.MapPost`/`.MapPut`/`.MapDelete`) with `.WithTags()`, `.WithName()`, `.WithDescription()` for Swagger. Controllers are not used.
+Validation is done via **FluentValidation**. All API uses **Minimal APIs** (`.MapGet`/`.MapPost`/`.MapPut`/`.MapDelete`) with Swagger attributes. Controllers are not used.
 
 ### Scraper Pattern
 
@@ -110,6 +120,36 @@ Each service has its own **MySQL database** (not schema). Databases are created 
 
 Services communicate via RabbitMQ + MassTransit. Events are defined in each service's Application layer and consumed downstream. Each service registers its own consumers in `Program.cs`.
 
+**Outbox pattern**: `OutboxProcessor` ensures reliable event publishing — events are written to an outbox table first, then published to RabbitMQ, preventing lost events under transient failures.
+
+**WebSocket**: `IOpportunityWebSocketHandler` pushes real-time opportunity updates to the React SPA.
+
+---
+
+## Data Flow
+
+```
+ScrapingService.Worker (Quartz.NET scheduled jobs)
+  → Playwright scrapers (Amazon, Walmart, CigarPage)
+  → ProductService.Api POST /api/products/upsert-from-scrape
+  → saves product + price snapshot
+  → publishes ProductScrapedEvent via outbox (RabbitMQ)
+    → MatchingService (fuzzy US↔VN match)
+    → ScoringService (landed cost + composite score)
+    → publishes OpportunityScoredEvent (RabbitMQ)
+    → NotificationService (checks thresholds, sends alerts)
+
+CMA.Gateway (YARP, :8080) → individual services (:5001–5004)
+React SPA (:3000) → Gateway
+```
+
+### Event Catalog
+
+| Event | Producer | Consumers |
+|---|---|---|
+| `ProductScraped` | ProductService | MatchingService, ScrapingService |
+| `OpportunityScored` | ScoringService | NotificationService, Frontend (WS) |
+
 ---
 
 ## Key Patterns
@@ -120,34 +160,27 @@ Services communicate via RabbitMQ + MassTransit. Events are defined in each serv
 - **Factory**: `OpportunityScoreFactory.Create()` for complex object construction
 - **Value Objects**: `Money` (amount + currency), `Percentage` — immutable, equality by value
 - **Polly**: Retry and circuit breaker on `HttpClient`s, RabbitMQ, and database calls
-- **IProductDbContext**: `ProductService` uses a `Contracts/Persistence/IProductDbContext.cs` interface boundary over `ProductDbContext` — inject this for persistence abstractions
-
----
-
-## Data Flow
-
-```
-ScrapingService.Worker (Quartz.NET scheduled jobs)
-  → scrapers (Playwright-based: Amazon, Walmart, CigarPage)
-  → ProductService.Api POST /api/products/upsert-from-scrape
-  → saves product + price snapshot
-  → publishes ProductScrapedEvent (RabbitMQ)
-
-  → ScrapingService.Worker (LandedCostRecalcJob)
-  → ScoringService (saves opportunity score)
-  → publishes OpportunityScoredEvent
-  → NotificationService (checks thresholds, sends alerts)
-
-CMA.Gateway (YARP) → React SPA
-```
+- **IProductDbContext**: ProductService uses `Contracts/Persistence/IProductDbContext.cs` as a persistence abstraction boundary
 
 ---
 
 ## Important Conventions
 
 - **`dotnet format`** is not used — style is enforced by `.editorconfig` only
-- **No EF migrations** — each service uses `db.Database.EnsureCreatedAsync()` in development
 - Each `Program.cs` wires its own DI: domain interfaces → infrastructure implementations
 - `ScrapingService.Worker` is purely `BackgroundService` / Quartz.NET — no HTTP API
 - Frontend is in `src/Apps/CMA.WebApp` (React + Vite) but served as static files in Docker
 - Docker healthchecks use `infrastructure/docker/healthcheck.sh` — a simple HTTP health probe
+- All services wait for MySQL, Redis, and RabbitMQ to be `service_healthy` before starting (configured in `docker-compose.yml`)
+- AuthService is planned/partial — it has Domain, Application, Infrastructure, and Api layers but may not be fully wired yet
+
+---
+
+## Test Projects
+
+There are 9 test projects in `tests/`:
+- `Common.UnitTests/`, `Common.IntegrationTests/`
+- `ProductService.UnitTests/`, `ProductService.IntegrationTests/`
+- `MatchingService.UnitTests/`, `MatchingService.IntegrationTests/`
+- `ScoringService.UnitTests/`, `ScoringService.IntegrationTests/`
+- `AuthService.Tests/`

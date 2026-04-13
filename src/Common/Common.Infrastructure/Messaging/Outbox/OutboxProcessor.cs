@@ -1,5 +1,5 @@
 using Common.Application.Interfaces;
-using Common.Infrastructure.Messaging.Outbox;
+using Common.Domain.Messaging.Outbox;
 using Common.Infrastructure.Persistence;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;

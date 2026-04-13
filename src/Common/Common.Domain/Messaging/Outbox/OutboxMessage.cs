@@ -1,6 +1,6 @@
 using Common.Domain.Entities;
 
-namespace Common.Infrastructure.Messaging.Outbox;
+namespace Common.Domain.Messaging.Outbox;
 
 /// <summary>
 /// Outbox message entity for reliable event delivery.

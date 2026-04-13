@@ -1,5 +1,5 @@
 using Common.Domain.Entities;
-using Common.Infrastructure.Messaging.Outbox;
+using Common.Domain.Messaging.Outbox;
 using Microsoft.EntityFrameworkCore;
 
 namespace Common.Infrastructure.Persistence;

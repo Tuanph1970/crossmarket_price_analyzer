@@ -1,4 +1,4 @@
-using Common.Infrastructure.Messaging.Outbox;
+using Common.Domain.Messaging.Outbox;
 
 namespace Common.Application.Interfaces;
 
