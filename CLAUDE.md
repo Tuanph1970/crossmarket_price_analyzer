@@ -26,7 +26,7 @@ dotnet test CrossMarketAnalyzer.sln
 dotnet test CrossMarketAnalyzer.sln --filter "FullyQualifiedName~UnitTests" --configuration Release
 
 # Run tests for a specific project
-dotnet test tests/ProductService.UnitTests/ProductService.UnitTests.csproj
+dotnet test tests/ProductService.UnitTests/
 
 # Run a specific API service (port 5001)
 dotnet run --project src/Services/ProductService/ProductService.Api
@@ -50,6 +50,31 @@ cd src/Apps/CMA.WebApp && npm install && npm run dev
 
 > Each service auto-creates its own database on startup via `EnsureCreatedAsync()`. **EF migrations are not used.**
 > `global.json` pins the .NET 9 SDK.
+
+---
+
+## Projects Layout
+
+```
+src/
+├── Common/
+│   ├── Common.Domain/          # Shared kernel (no infra deps)
+│   ├── Common.Application/     # MediatR behaviors, shared interfaces
+│   └── Common.Infrastructure/  # EF Core, Redis, RabbitMQ, Serilog, OpenTelemetry
+├── Services/
+│   ├── ProductService/         # Domain + Application + Infrastructure + Contracts + Api
+│   ├── MatchingService/        # Domain + Application + Infrastructure + Api
+│   ├── ScoringService/         # Domain + Application + Infrastructure + Api
+│   ├── NotificationService/     # Domain + Application + Infrastructure + Api
+│   ├── ScrapingService/         # Domain + Application + Infrastructure + Worker
+│   └── AuthService/            # CrossMarket.SharedKernel + Domain + App + Infra + Api
+├── Apps/
+│   ├── CMA.Gateway/            # YARP reverse proxy
+│   └── CMA.WebApp/             # React SPA (Vite)
+tests/                          # 9 test projects mirroring service structure
+documents/                       # PRD, architecture, design docs
+infrastructure/docker/           # healthcheck.sh, Prometheus/Grafana configs
+```
 
 ---
 
@@ -82,26 +107,23 @@ Inside containers all services listen on `8080`; `docker-compose.override.yml` m
 
 ### Layer Pattern (per service)
 
-```
-Service/
-├── Domain/           # Entities, value objects, enums, domain exceptions
-├── Application/     # Commands/Queries (MediatR), Handlers, DTOs, Services
-├── Infrastructure/  # EF Core DbContext, repositories, external clients
-├── Contracts/       # (ProductService only) — IProductDbContext interface boundary
-└── Api/             # Program.cs, Minimal API endpoints
-```
+Most services follow `Domain / Application / Infrastructure / Api` (or `Worker` for ScrapingService). Two notable deviations:
 
-The `Contracts/` layer in ProductService exposes `IProductDbContext` (not the concrete `ProductDbContext`) so consumers of the service don't depend on EF Core internals.
+**ProductService has a `Contracts/` layer** exposing `IProductDbContext` (not the concrete `ProductDbContext`) so consumers don't depend on EF Core internals. EF configurations live in `ProductService.Application/Persistence/Configurations/`.
+
+**ScrapingService has `Infrastructure/Srapers/`** containing VN scraper implementations: HTTP API clients (`ShopeeApiClient`, `LazadaApiClient`) and Playwright-based (`TikiScraper`). US scrapers (`AmazonScraper`, `WalmartScraper`, `CigarPageScraper`) are registered in the Worker's `Program.cs`.
+
+**Gateway** (`CMA.Gateway`) has no business logic — YARP routes are entirely defined in `appsettings.json` under the `ReverseProxy` section.
 
 AuthService has its own `CrossMarket.SharedKernel/` sub-project (separate from `Common/`), containing `JwtSettings` and `PasswordHasher`.
 
 ### Common Shared Libraries
 
-- **`Common.Domain`**: Shared kernel — `BaseEntity<TId>`, `AuditableEntity`, `Money`, `Percentage`, `CountryCode`, enums (`ProductSource`, `MatchStatus`, `AlertType`, `ConfidenceLevel`, `DeliveryChannel`), `IRepository<T>`, `IUnitOfWork`. **No infrastructure dependencies.**
+- **`Common.Domain`**: Shared kernel — `BaseEntity<TId>`, `AuditableEntity`, `Money`, `Percentage`, `CountryCode`, enums (`ProductSource`, `MatchStatus`, `AlertType`, `ConfidenceLevel`, `DeliveryChannel`), `IRepository<T>`, `IUnitOfWork>`. **No infrastructure dependencies.**
 
 - **`Common.Application`**: Pipeline behaviors (`ValidationBehavior`, `LoggingBehavior`, `CachingBehavior`, `PerfBehavior`), shared interfaces (`ICacheService`, `IEventPublisher`, `IExchangeRateService`, `IScraperFactory`, `IRotatingProxyService`, `IOpportunityWebSocketHandler`), `ServiceCollectionExtensions`.
 
-- **`Common.Infrastructure`**: `BaseDbContext`, `RedisCacheService`, `RabbitMqEventPublisher`, `OutboxProcessor`, Serilog config, OpenTelemetry setup, Polly resilience policies. Key entry points:
+- **`Common.Infrastructure`**: `BaseDbContext`, `RedisCacheService`, `RabbitMqEventPublisher`, `OutboxProcessor`, Serilog config, OpenTelemetry setup, Polly resilience policies. Entry points:
   - `UseCommonLogging()` — called on `builder.Host` to configure Serilog + OpenTelemetry
   - `AddCommonInfrastructure(config, serviceName)` — called on `builder.Services` to register DB, Redis, RabbitMQ, health checks
   - `AddCommonApplication()` — called on `builder.Services` to register MediatR + all pipeline behaviors
@@ -249,6 +271,7 @@ React SPA (:3000) → Gateway
 
 ## Important Conventions
 
+<<<<<<< HEAD
 - **No `.editorconfig`**: there is no `.editorconfig` file — code style follows default .NET conventions only
 - Each `Program.cs` wires its own DI: domain interfaces → infrastructure implementations
 - `ScrapingService.Worker` uses `Host.CreateApplicationBuilder` (Worker pattern); all other services use `WebApplication.CreateBuilder`
@@ -256,6 +279,13 @@ React SPA (:3000) → Gateway
 - Docker healthchecks use `infrastructure/docker/healthcheck.sh`
 - All services wait for MySQL, Redis, and RabbitMQ to be `service_healthy` before starting (configured in `docker-compose.yml`)
 - AuthService.Api is fully implemented but **not listed in docker-compose** — it exists but is not deployed in the current stack
+=======
+- Style is enforced by `.editorconfig` only — **`dotnet format` is not used**
+- Each `Program.cs` wires its own DI: domain interfaces → infrastructure implementations
+- `ScrapingService.Worker` uses `BackgroundService` + Quartz.NET — no HTTP API
+- Gateway routing is entirely config-driven (`appsettings.json` `ReverseProxy` section), not code
+- Docker healthchecks use `infrastructure/docker/healthcheck.sh` — a simple HTTP probe curling `/health` on port 8080
+- All services wait for MySQL, Redis, and RabbitMQ to be `service_healthy` before starting (configured in `docker-compose.yml`)
 
 ---
 

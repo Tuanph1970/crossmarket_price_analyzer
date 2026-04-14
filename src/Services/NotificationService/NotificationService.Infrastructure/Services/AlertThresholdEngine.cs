@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using NotificationService.Domain.Entities;
 using NotificationService.Infrastructure.Services;
 
 namespace NotificationService.Infrastructure.Services;
@@ -94,11 +95,13 @@ public sealed class AlertThresholdEngine : BackgroundService
     }
 
     private async Task DispatchAlertAsync(
-        Domain.Entities.AlertPreference threshold,
+        AlertPreference threshold,
         OpportunityScoredEvent evt,
         CancellationToken ct)
     {
-        var matchUrl = $"{_scopeFactory.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>()["App:BaseUrl"]}/compare/{evt.MatchId}";
+        var baseUrl = _scopeFactory.CreateScope().ServiceProvider
+            .GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>()["App:BaseUrl"];
+        var matchUrl = $"{baseUrl}/compare/{evt.MatchId}";
 
         switch (threshold.Channel)
         {
@@ -126,7 +129,7 @@ public sealed class AlertThresholdEngine : BackgroundService
         // Log delivery
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<NotificationDbContext>();
-        var log = Domain.Entities.DeliveryLog.Create(
+        var log = DeliveryLog.Create(
             threshold.UserId, threshold.Channel, threshold.DeliveryTarget,
             $"Opportunity alert: {evt.ProductName} (Score {evt.CompositeScore:F0})",
             success: true, matchId: evt.MatchId);

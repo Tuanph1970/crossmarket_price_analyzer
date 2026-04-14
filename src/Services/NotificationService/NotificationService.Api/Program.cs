@@ -1,6 +1,7 @@
 using Common.Application.Extensions;
 using Common.Infrastructure.Configuration;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using NotificationService.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -13,7 +14,8 @@ builder.Services.AddCommonApplication();
 builder.Services.AddDbContext<NotificationDbContext>(options =>
 {
     var cs = builder.Configuration.GetConnectionString("DefaultConnection");
-    options.UseMySql(cs, ServerVersion.AutoDetect(cs));
+    var serverVersion = new MySqlServerVersion(new Version(8, 0, 0));
+    options.UseMySql(cs, serverVersion);
 });
 
 // P4-B05: SendGrid email service
@@ -39,7 +41,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new() { Title = "NotificationService API", Version = "v1" });
-    var xmlFile = $"{typeof(NotificationService.Api.Program).Assembly.GetName().Name}.xml";
+    var xmlFile = $"{typeof(Program).Assembly.GetName().Name}.xml";
     var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
     if (File.Exists(xmlPath))
         c.IncludeXmlComments(xmlPath);
@@ -94,7 +96,7 @@ app.MapPost("/api/notifications/reports/opportunity", async (
                     o.CompositeScore, o.ProfitMarginPct,
                     o.DemandScore, o.CompetitionScore,
                     o.PriceStabilityScore, o.MatchConfidenceScore,
-                    o.LandedCostVnd, o.VietnamRetailVnd)),
+                    o.LandedCostVnd, o.VietnamRetailVnd)).ToList(),
                 req.PeriodFrom, req.PeriodTo, req.UserId), ct)
         : await reportService.GenerateOpportunityReportAsync(
             new OpportunityReportRequest(
@@ -104,7 +106,7 @@ app.MapPost("/api/notifications/reports/opportunity", async (
                     o.CompositeScore, o.ProfitMarginPct,
                     o.DemandScore, o.CompetitionScore,
                     o.PriceStabilityScore, o.MatchConfidenceScore,
-                    o.LandedCostVnd, o.VietnamRetailVnd)),
+                    o.LandedCostVnd, o.VietnamRetailVnd)).ToList(),
                 req.PeriodFrom, req.PeriodTo, req.UserId), ct);
 
     var contentType = req.Format.ToLowerInvariant() == "csv"

@@ -1,6 +1,8 @@
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Moq;
+using ScoringService.Application.Persistence;
 using ScoringService.Application.Services;
 using Xunit;
 
@@ -139,7 +141,10 @@ public class Phase3ServicesTests
     {
         var logger = new Mock<ILogger<PriceStabilityService>>();
         var httpClientFactory = new Mock<IHttpClientFactory>();
-        var service = new PriceStabilityService(logger.Object, httpClientFactory.Object);
+        var options = new DbContextOptionsBuilder<ScoringDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
+        var db = new ScoringDbContext(options);
+        var service = new PriceStabilityService(db, httpClientFactory.Object, logger.Object);
 
         var prices = new[] { 100m, 101m, 99m, 100.5m, 100m };
         var cv = service.CalculateCoefficientOfVariation(prices);
@@ -151,7 +156,10 @@ public class Phase3ServicesTests
     {
         var logger = new Mock<ILogger<PriceStabilityService>>();
         var httpClientFactory = new Mock<IHttpClientFactory>();
-        var service = new PriceStabilityService(logger.Object, httpClientFactory.Object);
+        var options = new DbContextOptionsBuilder<ScoringDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
+        var db = new ScoringDbContext(options);
+        var service = new PriceStabilityService(db, httpClientFactory.Object, logger.Object);
 
         var prices = new[] { 100m, 130m, 70m, 120m, 80m };
         var cv = service.CalculateCoefficientOfVariation(prices);
@@ -163,7 +171,10 @@ public class Phase3ServicesTests
     {
         var logger = new Mock<ILogger<PriceStabilityService>>();
         var httpClientFactory = new Mock<IHttpClientFactory>();
-        var service = new PriceStabilityService(logger.Object, httpClientFactory.Object);
+        var options = new DbContextOptionsBuilder<ScoringDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
+        var db = new ScoringDbContext(options);
+        var service = new PriceStabilityService(db, httpClientFactory.Object, logger.Object);
 
         service.CalculateCoefficientOfVariation(new[] { 100m }).Should().Be(0m);
     }
@@ -173,7 +184,10 @@ public class Phase3ServicesTests
     {
         var logger = new Mock<ILogger<PriceStabilityService>>();
         var httpClientFactory = new Mock<IHttpClientFactory>();
-        var service = new PriceStabilityService(logger.Object, httpClientFactory.Object);
+        var options = new DbContextOptionsBuilder<ScoringDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
+        var db = new ScoringDbContext(options);
+        var service = new PriceStabilityService(db, httpClientFactory.Object, logger.Object);
 
         service.CalculateCoefficientOfVariation(new[] { 0m, 0m, 0m }).Should().Be(0m);
     }
@@ -190,7 +204,10 @@ public class Phase3ServicesTests
     {
         var logger = new Mock<ILogger<PriceStabilityService>>();
         var httpClientFactory = new Mock<IHttpClientFactory>();
-        var service = new PriceStabilityService(logger.Object, httpClientFactory.Object);
+        var options = new DbContextOptionsBuilder<ScoringDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
+        var db = new ScoringDbContext(options);
+        var service = new PriceStabilityService(db, httpClientFactory.Object, logger.Object);
 
         // Calculate CV for synthetic prices that produce the target CV
         // Approximate with: mean=100, stdDev=cv
@@ -208,7 +225,7 @@ public class Phase3ServicesTests
     {
         var logger = new Mock<ILogger<ShippingService>>();
         var mockExchangeRate = new Mock<Common.Application.Interfaces.IExchangeRateService>();
-        mockExchangeRate.Setup(x => x.GetUsdToVndRateAsync(It.IsAny<CancellationToken>()))
+        mockExchangeRate.Setup(x => x.GetCachedRateAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(25000m);
 
         var httpClient = new HttpClient();
@@ -233,7 +250,7 @@ public class Phase3ServicesTests
     {
         var logger = new Mock<ILogger<ShippingService>>();
         var mockExchangeRate = new Mock<Common.Application.Interfaces.IExchangeRateService>();
-        mockExchangeRate.Setup(x => x.GetUsdToVndRateAsync(It.IsAny<CancellationToken>()))
+        mockExchangeRate.Setup(x => x.GetCachedRateAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(25000m);
 
         var httpClient = new HttpClient();
@@ -255,7 +272,7 @@ public class Phase3ServicesTests
 
         var logger = new Mock<ILogger<ShippingService>>();
         var mockExchangeRate = new Mock<Common.Application.Interfaces.IExchangeRateService>();
-        mockExchangeRate.Setup(x => x.GetUsdToVndRateAsync(It.IsAny<CancellationToken>()))
+        mockExchangeRate.Setup(x => x.GetCachedRateAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(25000m);
 
         var httpClient = new HttpClient();
@@ -265,6 +282,6 @@ public class Phase3ServicesTests
         // so we test the formula indirectly by checking the rate is reasonable
         var request = new ShippingRequest(weight, "US", "VN", value);
         var quote = service.GetQuoteAsync(request).GetAwaiter().GetResult();
-        quote!.RateUsd.Should().BeCloseTo(expected, 0.01m);
+        quote!.RateUsd.Should().BeApproximately(expected, 0.01m);
     }
 }

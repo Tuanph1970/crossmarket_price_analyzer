@@ -144,4 +144,30 @@ public static class ResiliencePolicies
             .Build();
     }
 
+    /// <summary>
+    /// Generic fallback: executes a fallback action on any unhandled failure.
+    /// </summary>
+    public static ResiliencePipeline<Unit> FallbackPipeline(
+        Action onFallback,
+        ILogger? logger = null)
+    {
+        return new ResiliencePipelineBuilder<Unit>()
+            .AddFallback(new FallbackStrategyOptions<Unit>
+            {
+                ShouldHandle = new PredicateBuilder<Unit>()
+                    .Handle<Exception>(ex => ex is not OperationCanceledException),
+                FallbackAction = _ =>
+                {
+                    try { onFallback(); }
+                    catch { /* swallow — already degraded */ }
+                    return Outcome.FromResultAsValueTask(Unit.Default);
+                },
+                OnFallback = _ =>
+                {
+                    logger?.LogWarning("Fallback action triggered");
+                    return ValueTask.CompletedTask;
+                },
+            })
+            .Build();
+    }
 }

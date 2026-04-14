@@ -1,5 +1,3 @@
-using Common.Domain;
-using Common.Domain.Entities;
 using Common.Domain.Enums;
 
 namespace NotificationService.Domain.Entities;
@@ -7,7 +5,7 @@ namespace NotificationService.Domain.Entities;
 /// <summary>
 /// User alert preference for opportunity notifications.
 /// </summary>
-public sealed class AlertPreference : BaseEntity<Guid>
+public sealed class AlertPreference : Common.Domain.Entities.BaseEntity<Guid>
 {
     public Guid UserId { get; private set; }
     public DeliveryChannel Channel { get; private set; }

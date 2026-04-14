@@ -1,12 +1,9 @@
-using Common.Domain;
-using Common.Domain.Entities;
-
 namespace NotificationService.Domain.Entities;
 
 /// <summary>
 /// Log of each notification delivery attempt.
 /// </summary>
-public sealed class DeliveryLog : BaseEntity<Guid>
+public sealed class DeliveryLog : Common.Domain.Entities.BaseEntity<Guid>
 {
     public Guid UserId { get; private set; }
     public Common.Domain.Enums.DeliveryChannel Channel { get; private set; }

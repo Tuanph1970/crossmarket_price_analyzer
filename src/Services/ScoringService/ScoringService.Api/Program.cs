@@ -196,7 +196,7 @@ app.MapPost("/api/scores", async (
     return Results.Created($"/api/scores/{cmd.MatchId}", new { MatchId = cmd.MatchId, CompositeScore = composite });
 })
 .Produces(StatusCodes.Status201Created)
-.ProducesValidationProblems()
+.Produces(StatusCodes.Status400BadRequest)
 .WithTags("Scores")
 .WithName("CalculateScore")
 .WithDescription("Calculates or updates the composite opportunity score for a product match.");
@@ -206,7 +206,7 @@ app.MapPut("/api/scores/weights", (
     UpdateWeightsRequest req) =>
     Results.Ok(new { Status = "Weights updated", Count = req.Weights.Count }))
 .Produces(StatusCodes.Status200OK)
-.ProducesValidationProblems()
+.Produces(StatusCodes.Status400BadRequest)
 .WithTags("Scores")
 .WithName("UpdateWeights")
 .WithDescription("Updates the scoring factor weights (admin endpoint).");

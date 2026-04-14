@@ -29,7 +29,6 @@ public sealed class RotatingProxyService : IRotatingProxyService
     private static readonly TimeSpan HealthCheckTimeout = TimeSpan.FromSeconds(5);
 
     public int HealthyCount => _states.Values.Count(s => s.IsHealthy);
-    private long _totalRotationCount;
     public long TotalRotationCount => _totalRotationCount;
     public long FailureCount => _states.Values.Sum(s => s.ConsecutiveFailures);
 

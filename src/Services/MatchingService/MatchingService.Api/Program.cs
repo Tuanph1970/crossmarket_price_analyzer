@@ -17,7 +17,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new() { Title = "MatchingService API", Version = "v1" });
-    var xmlFile = $"{typeof(MatchingService.Api.Program).Assembly.GetName().Name}.xml";
+    var xmlFile = $"{typeof(Program).Assembly.GetName().Name}.xml";
     var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
     if (File.Exists(xmlPath))
         c.IncludeXmlComments(xmlPath);
@@ -119,7 +119,7 @@ app.MapPost("/api/matches", async (
     ));
 })
 .Produces<ProductMatchDto>(StatusCodes.Status201Created)
-.ProducesValidationProblems()
+.ProducesValidationProblem()
 .WithTags("Matches")
 .WithName("CreateMatch")
 .WithDescription("Creates a new US↔Vietnam product match and computes its fuzzy confidence score.");
@@ -188,7 +188,7 @@ app.MapPost("/api/matches/batch-review", async (
     return Results.Ok(new { Processed = processed });
 })
 .Produces(StatusCodes.Status200OK)
-.ProducesValidationProblems()
+.ProducesValidationProblem()
 .WithTags("Matches")
 .WithName("BatchReviewMatches")
 .WithDescription("Performs a batch confirm/reject operation on multiple pending matches.");
@@ -244,3 +244,5 @@ public record BatchReviewRequest(List<BatchReviewItem> Items);
 /// <param name="MatchId">Identifier of the match to review.</param>
 /// <param name="Action">Action to apply: "Confirm" or "Reject".</param>
 public record BatchReviewItem(Guid MatchId, string Action);
+
+public partial class Program { }

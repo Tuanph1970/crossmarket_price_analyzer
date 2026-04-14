@@ -126,8 +126,10 @@ public class ShippingService : IShippingService
     /// rate = weight * 12.5 + declaredValue * 0.02 + 15 (base fee)
     /// Estimated transit: 2–4 business days
     /// </summary>
-    private Task<ShippingQuote?> GetFedExQuoteAsync(ShippingRequest request, CancellationToken ct)
-        => _resiliencePipeline.ExecuteAsync(async _ =>
+    private async Task<ShippingQuote?> GetFedExQuoteAsync(ShippingRequest request, CancellationToken ct)
+    {
+        ShippingQuote? quote = null;
+        await _resiliencePipeline.ExecuteAsync(async _ =>
         {
             // TODO (v2): Replace with real FedEx Rate API call:
             // var response = await _httpClient.PostAsJsonAsync(
@@ -140,7 +142,7 @@ public class ShippingService : IShippingService
             var valueCharge = request.DeclaredValueUsd * 0.02m;
             var rate = Math.Round(baseRate + weightCharge + valueCharge, 2);
 
-            return new ShippingQuote(
+            quote = new ShippingQuote(
                 Carrier: "FedEx",
                 ServiceName: "International Priority",
                 RateUsd: rate,
@@ -148,14 +150,18 @@ public class ShippingService : IShippingService
                 ExpiresAt: DateTime.UtcNow.AddHours(24)
             );
         }, ct);
+        return quote;
+    }
 
     /// <summary>
     /// DHL Express Worldwide mock:
     /// rate = weight * 10.5 + declaredValue * 0.015 + 12 (base fee)
     /// Estimated transit: 3–5 business days
     /// </summary>
-    private Task<ShippingQuote?> GetDhlQuoteAsync(ShippingRequest request, CancellationToken ct)
-        => _resiliencePipeline.ExecuteAsync(async _ =>
+    private async Task<ShippingQuote?> GetDhlQuoteAsync(ShippingRequest request, CancellationToken ct)
+    {
+        ShippingQuote? quote = null;
+        await _resiliencePipeline.ExecuteAsync(async _ =>
         {
             // TODO (v2): Replace with real DHL API call:
             // var response = await _httpClient.PostAsJsonAsync(
@@ -168,7 +174,7 @@ public class ShippingService : IShippingService
             var valueCharge = request.DeclaredValueUsd * 0.015m;
             var rate = Math.Round(baseRate + weightCharge + valueCharge, 2);
 
-            return new ShippingQuote(
+            quote = new ShippingQuote(
                 Carrier: "DHL",
                 ServiceName: "Express Worldwide",
                 RateUsd: rate,
@@ -176,6 +182,8 @@ public class ShippingService : IShippingService
                 ExpiresAt: DateTime.UtcNow.AddHours(24)
             );
         }, ct);
+        return quote;
+    }
 }
 
 public interface IShippingService

@@ -1,4 +1,7 @@
+using Microsoft.Extensions.Logging;
 using OfficeOpenXml;
+using OfficeOpenXml.Style;
+using ScoringService.Application.Persistence;
 
 namespace ScoringService.Application.Services;
 
@@ -82,7 +85,7 @@ public class ExcelExportService : IExcelExportService
         }
 
         oppSheet.Cells[oppSheet.Dimension.Address].AutoFitColumns();
-        oppSheet.View.FreezePanes = 2; // freeze header row
+        oppSheet.View.FreezePanes(2, 1); // freeze header row
 
         // ── Sheet 3: Top 20 ──────────────────────────────────────────────────
         var topSheet = workbook.Worksheets.Add("Top 20");
@@ -117,7 +120,7 @@ public class ExcelExportService : IExcelExportService
         }
 
         topSheet.Cells[topSheet.Dimension.Address].AutoFitColumns();
-        topSheet.View.FreezePanes = 2;
+        topSheet.View.FreezePanes(2, 1);
 
         _logger.LogInformation("Excel export: {Count} opportunities → {Sheets} sheets",
             request.Rows.Count, workbook.Worksheets.Count);
@@ -139,7 +142,7 @@ public class ExcelExportService : IExcelExportService
 
         // TODO: Fetch from ProductService API if needed
         sheet.Cells[sheet.Dimension.Address].AutoFitColumns();
-        sheet.View.FreezePanes = 2;
+        sheet.View.FreezePanes(2, 1);
 
         await Task.CompletedTask;
         return package.GetAsByteArray();

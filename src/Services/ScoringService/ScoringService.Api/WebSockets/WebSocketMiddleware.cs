@@ -33,12 +33,12 @@ public sealed class WebSocketMiddleware
         }
 
         WebSocket? socket = null;
-        Guid connectionId;
+        Guid connectionId = Guid.Empty;
 
         try
         {
             // Perform the WebSocket upgrade
-            socket = await context.WebSockets.AcceptWebSocketAsync(subprotocol: null);
+            socket = await context.WebSockets.AcceptWebSocketAsync();
             connectionId = handler.AddConnection(socket);
 
             _logger.LogInformation(

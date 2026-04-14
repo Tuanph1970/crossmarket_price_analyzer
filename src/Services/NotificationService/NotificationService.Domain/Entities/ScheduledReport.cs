@@ -1,12 +1,9 @@
-using Common.Domain;
-using Common.Domain.Entities;
-
 namespace NotificationService.Domain.Entities;
 
 /// <summary>
 /// Scheduled report subscription for periodic opportunity digest emails.
 /// </summary>
-public sealed class ScheduledReport : BaseEntity<Guid>
+public sealed class ScheduledReport : Common.Domain.Entities.BaseEntity<Guid>
 {
     public Guid UserId { get; private set; }
     public string ReportName { get; private set; } = string.Empty;
