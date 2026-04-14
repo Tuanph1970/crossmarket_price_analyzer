@@ -1,4 +1,5 @@
 using Common.Domain;
+using Common.Domain.Entities;
 
 namespace NotificationService.Domain.Entities;
 

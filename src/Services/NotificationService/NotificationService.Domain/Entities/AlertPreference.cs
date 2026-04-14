@@ -1,4 +1,5 @@
 using Common.Domain;
+using Common.Domain.Entities;
 using Common.Domain.Enums;
 
 namespace NotificationService.Domain.Entities;
@@ -7,6 +8,7 @@ namespace NotificationService.Domain.Entities;
 /// User alert preference for opportunity notifications.
 /// </summary>
 public sealed class AlertPreference : BaseEntity<Guid>
+{
     public Guid UserId { get; private set; }
     public DeliveryChannel Channel { get; private set; }
     public string DeliveryTarget { get; private set; } = string.Empty; // email address or Telegram chat ID

@@ -4,6 +4,7 @@ EXPOSE 8080
 
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
+COPY ["CrossMarketAnalyzer.sln", "./"]
 COPY ["src/Common/", "src/Common/"]
 COPY ["src/Services/NotificationService/", "src/Services/NotificationService/"]
 RUN dotnet restore "src/Services/NotificationService/NotificationService.Api/NotificationService.Api.csproj"

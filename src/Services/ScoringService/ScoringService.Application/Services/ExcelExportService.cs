@@ -1,5 +1,4 @@
-using OfficeOpenXml.ExcelPackage;
-using OfficeOpenXml.Style;
+using OfficeOpenXml;
 
 namespace ScoringService.Application.Services;
 
@@ -45,7 +44,7 @@ public class ExcelExportService : IExcelExportService
         summarySheet.Cells[2, 1].Value = $"Generated: {DateTime.UtcNow:yyyy-MM-dd HH:mm} UTC";
         summarySheet.Cells[3, 1].Value = $"Title: {request.Title}";
         summarySheet.Cells[4, 1].Value = $"Total Records: {request.Rows.Count}";
-        summarySheet.Cells[5, 1].Value = $"Average Margin %: {request.Rows.Count > 0 ? request.Rows.Average(r => r.ProfitMarginPct) : 0m:F2}";
+        summarySheet.Cells[5, 1].Value = $"Average Margin %: {(request.Rows.Count > 0 ? request.Rows.Average(r => r.ProfitMarginPct) : 0m):F2}";
 
         // ── Sheet 2: Opportunities ───────────────────────────────────────────
         var oppSheet = workbook.Worksheets.Add("Opportunities");

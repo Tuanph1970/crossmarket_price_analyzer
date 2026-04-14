@@ -97,7 +97,7 @@ public class TikiScraper : IProductScraper
                 Currency: "VND",
                 QuantityPerUnit: 1m,
                 SellerName: seller?.Trim(),
-                SellerRating: rating,
+                SellerRating: rating.HasValue ? (decimal)rating.Value : null,
                 SalesVolume: null,
                 SourceUrl: url,
                 Source: ProductSource.Tiki

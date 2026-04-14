@@ -1,8 +1,8 @@
 using Microsoft.Extensions.Logging;
 using Polly;
 using Polly.CircuitBreaker;
-using Polly.Fallback;
 using Polly.Retry;
+using Polly.Timeout;
 
 namespace Common.Infrastructure.Resilience;
 
@@ -144,36 +144,4 @@ public static class ResiliencePolicies
             .Build();
     }
 
-    /// <summary>
-    /// Generic fallback: executes a fallback action on any unhandled failure.
-    /// </summary>
-    public static ResiliencePipeline FallbackPipeline(
-        Action onFallback,
-        ILogger? logger = null)
-    {
-        return new ResiliencePipelineBuilder()
-            .AddFallback(new FallbackStrategyOptions
-            {
-                ShouldHandle = new PredicateBuilder()
-                    .Handle<Exception>(ex => ex is not OperationCanceledException),
-                FallbackAction = _ =>
-                {
-                    try { onFallback(); }
-                    catch { /* swallow — already degraded */ }
-                    return Outcome.FromResultAsValueTask(Unit.Default);
-                },
-                OnFallback = _ =>
-                {
-                    logger?.LogWarning("Fallback action triggered");
-                    return ValueTask.CompletedTask;
-                },
-            })
-            .Build();
-    }
-}
-
-// Lightweight Unit to avoid System.Reackerel dependency
-file readonly struct Unit
-{
-    public static Unit Default => default;
 }

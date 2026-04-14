@@ -3,6 +3,7 @@ WORKDIR /app
 
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
+COPY ["CrossMarketAnalyzer.sln", "./"]
 COPY ["src/Common/", "src/Common/"]
 COPY ["src/Services/ScrapingService/", "src/Services/ScrapingService/"]
 RUN dotnet restore "src/Services/ScrapingService/ScrapingService.Worker/ScrapingService.Worker.csproj"

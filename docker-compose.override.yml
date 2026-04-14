@@ -40,8 +40,5 @@ services:
       - ./src/Services/ScrapingService:/app
 
   gateway:
-    build:
-      context: .
-      dockerfile: src/Apps/CMA.Gateway/Dockerfile
     volumes:
       - ./src/Apps/CMA.Gateway:/app

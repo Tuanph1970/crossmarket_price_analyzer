@@ -4,6 +4,7 @@ EXPOSE 8080
 
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
+COPY ["CrossMarketAnalyzer.sln", "./"]
 COPY ["src/Common/", "src/Common/"]
 COPY ["src/Services/MatchingService/", "src/Services/MatchingService/"]
 RUN dotnet restore "src/Services/MatchingService/MatchingService.Api/MatchingService.Api.csproj"

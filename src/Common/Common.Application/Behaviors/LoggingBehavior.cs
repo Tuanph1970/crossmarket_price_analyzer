@@ -1,4 +1,3 @@
-using Common.Domain.Interfaces;
 using MediatR;
 using Microsoft.Extensions.Logging;
 

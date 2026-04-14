@@ -1,5 +1,4 @@
 using Common.Application.Interfaces;
-using Common.Domain.Interfaces;
 using Common.Domain.Messaging.Outbox;
 using MassTransit;
 using Microsoft.Extensions.Logging;

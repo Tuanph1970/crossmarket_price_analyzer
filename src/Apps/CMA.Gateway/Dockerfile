@@ -4,13 +4,13 @@ EXPOSE 8080
 
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
-COPY ["src/Apps/CMA.Gateway/CMA.Gateway.csproj", "src/Apps/CMA.Gateway/"]
-RUN dotnet restore "src/Apps/CMA.Gateway/CMA.Gateway.csproj"
+COPY ["CMA.Gateway.csproj", "./"]
+RUN dotnet restore "CMA.Gateway.csproj"
 COPY . .
-RUN dotnet build "src/Apps/CMA.Gateway/CMA.Gateway.csproj" -c Release -o /app/build
+RUN dotnet build "CMA.Gateway.csproj" -c Release -o /app/build
 
 FROM build AS publish
-RUN dotnet publish "src/Apps/CMA.Gateway/CMA.Gateway.csproj" -c Release -o /app/publish /p:UseAppHost=false
+RUN dotnet publish "CMA.Gateway.csproj" -c Release -o /app/publish /p:UseAppHost=false
 
 FROM base AS final
 WORKDIR /app

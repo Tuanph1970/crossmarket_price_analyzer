@@ -76,7 +76,7 @@ public sealed class EmailNotificationService : IEmailNotificationService
      border-radius:6px; text-decoration:none; font-weight:bold;">View Opportunity →</a>
   <p style="margin-top:24px; color:#888; font-size:12px;">
     You are receiving this because you have alert thresholds configured on CrossMarket.<br>
-    <a href="{{unsubscribe_url}}">Manage alerts</a>
+    <a href="{{{{unsubscribe_url}}}}">Manage alerts</a>
   </p>
 </body>
 </html>

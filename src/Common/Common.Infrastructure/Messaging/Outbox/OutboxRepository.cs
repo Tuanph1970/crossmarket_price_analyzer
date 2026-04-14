@@ -1,4 +1,4 @@
-using Common.Domain.Interfaces;
+using Common.Application.Interfaces;
 using Common.Domain.Messaging.Outbox;
 using Common.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;

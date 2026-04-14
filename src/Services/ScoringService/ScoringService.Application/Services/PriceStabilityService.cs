@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using ScoringService.Application.Persistence;
 
 namespace ScoringService.Application.Services;

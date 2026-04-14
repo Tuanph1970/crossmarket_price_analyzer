@@ -29,7 +29,8 @@ public sealed class RotatingProxyService : IRotatingProxyService
     private static readonly TimeSpan HealthCheckTimeout = TimeSpan.FromSeconds(5);
 
     public int HealthyCount => _states.Values.Count(s => s.IsHealthy);
-    public long TotalRotationCount { get; private set; }
+    private long _totalRotationCount;
+    public long TotalRotationCount => _totalRotationCount;
     public long FailureCount => _states.Values.Sum(s => s.ConsecutiveFailures);
 
     public RotatingProxyService(
@@ -49,7 +50,7 @@ public sealed class RotatingProxyService : IRotatingProxyService
             .ToArray();
 
         foreach (var uri in _proxies)
-            _states[uri] = new ProxyHealthState(uri);
+            _states[uri] = new ProxyHealthState();
 
         _logger.LogInformation(
             "RotatingProxyService initialized with {Count} proxies",
@@ -79,7 +80,7 @@ public sealed class RotatingProxyService : IRotatingProxyService
 
             if (_states[uri].IsHealthy)
             {
-                Interlocked.Increment(ref TotalRotationCount);
+                Interlocked.Increment(ref _totalRotationCount);
                 _logger.LogDebug("RotatingProxyService: selected {Uri}", uri);
 
                 // Kick off background health-check without blocking the return
@@ -128,15 +129,14 @@ public sealed class RotatingProxyService : IRotatingProxyService
             var response = await client.SendAsync(request, ct);
             var isHealthy = response.IsSuccessStatusCode;
 
-            var state = _states[proxyUri];
             if (isHealthy)
             {
-                state.RecordSuccess();
+                _states[proxyUri].RecordSuccess();
                 _logger.LogTrace("RotatingProxyService: health-check OK for {Uri}", proxyUri);
             }
             else
             {
-                state.RecordFailure();
+                _states[proxyUri].RecordFailure();
                 _logger.LogWarning(
                     "RotatingProxyService: health-check FAILED for {Uri} — HTTP {Status}",
                     proxyUri, response.StatusCode);
