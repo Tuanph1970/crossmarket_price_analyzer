@@ -1,8 +1,10 @@
 using Microsoft.Extensions.Logging;
 using Polly;
 using Polly.CircuitBreaker;
+using Polly.Fallback;
 using Polly.Retry;
 using Polly.Timeout;
+using ResiliencePolicies = Common.Infrastructure.Resilience;
 
 namespace Common.Infrastructure.Resilience;
 

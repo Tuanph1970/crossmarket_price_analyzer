@@ -32,6 +32,8 @@ public sealed class RotatingProxyService : IRotatingProxyService
     public long TotalRotationCount => _totalRotationCount;
     public long FailureCount => _states.Values.Sum(s => s.ConsecutiveFailures);
 
+    private long _totalRotationCount;
+
     public RotatingProxyService(
         IConfiguration configuration,
         ILogger<RotatingProxyService> logger,
