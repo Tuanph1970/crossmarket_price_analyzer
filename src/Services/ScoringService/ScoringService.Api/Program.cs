@@ -92,7 +92,7 @@ app.MapGet("/api/scores", async (
 
     var dtos = items.Select(s => new OpportunityScoreDto(
         s.Id, s.MatchId, s.CompositeScore, s.ProfitMarginPct,
-        s.LandedCostVnd > 0 ? Math.Round(s.PriceDifferenceVnd / s.LandedCostVnd * 100m, 2) : 0,
+        s.LandedCostVnd != 0 ? Math.Round(s.PriceDifferenceVnd / s.LandedCostVnd * 100m, 2) : 0,
         s.DemandScore, s.CompetitionScore, s.PriceStabilityScore,
         s.MatchConfidenceScore, s.LandedCostVnd, s.VietnamRetailVnd,
         s.PriceDifferenceVnd, s.CalculatedAt
@@ -149,36 +149,35 @@ app.MapGet("/api/scores/{matchId:guid}", async (
 
 // POST /api/scores — calculate score for a match
 app.MapPost("/api/scores", async (
-    CalculateScoreCommand cmd,
+    CalculateScoreRequest req,
     ScoringEngine engine,
     LandedCostCalculator calculator,
     ScoringDbContext db,
     CancellationToken ct) =>
 {
-    var shipping = cmd.ShippingCostUsd ?? 10.0m;
-    // P2-B06: honour manual overrides (LandedCostOverrideVnd, ImportDutyOverridePct)
+    var shipping = req.ShippingCostUsd ?? 10.0m;
     var breakdown = calculator.CalculateBreakdown(
-        cmd.UsPriceUsd, cmd.ExchangeRate, shipping,
-        cmd.ImportDutyOverridePct ?? cmd.ImportDutyRatePct, cmd.VatRatePct,
-        landedCostOverride: cmd.LandedCostOverrideVnd);
-    var profitMargin = calculator.CalculateProfitMargin(cmd.VnRetailPriceVnd, breakdown.TotalLandedCostVnd);
+        req.UsPriceUsd, req.ExchangeRate, shipping,
+        req.ImportDutyOverridePct ?? req.ImportDutyRatePct, req.VatRatePct,
+        landedCostOverride: req.LandedCostOverrideVnd);
+    var profitMargin = calculator.CalculateProfitMargin(req.VnRetailPriceVnd, breakdown.TotalLandedCostVnd);
     var composite = engine.CalculateCompositeScore(
-        profitMargin, cmd.DemandScore, cmd.CompetitionScore,
-        cmd.PriceStabilityScore, cmd.MatchConfidenceScore);
+        profitMargin, req.DemandScore, req.CompetitionScore,
+        req.PriceStabilityScore, req.MatchConfidenceScore);
 
-    var existing = await db.OpportunityScores.FirstOrDefaultAsync(x => x.MatchId == cmd.MatchId, ct);
+    var existing = await db.OpportunityScores.FirstOrDefaultAsync(x => x.MatchId == req.MatchId, ct);
 
     if (existing != null)
     {
         existing.ProfitMarginPct = profitMargin;
-        existing.DemandScore = cmd.DemandScore;
-        existing.CompetitionScore = cmd.CompetitionScore;
-        existing.PriceStabilityScore = cmd.PriceStabilityScore;
-        existing.MatchConfidenceScore = cmd.MatchConfidenceScore;
+        existing.DemandScore = req.DemandScore;
+        existing.CompetitionScore = req.CompetitionScore;
+        existing.PriceStabilityScore = req.PriceStabilityScore;
+        existing.MatchConfidenceScore = req.MatchConfidenceScore;
         existing.CompositeScore = composite;
         existing.LandedCostVnd = breakdown.TotalLandedCostVnd;
-        existing.VietnamRetailVnd = cmd.VnRetailPriceVnd;
-        existing.PriceDifferenceVnd = cmd.VnRetailPriceVnd - breakdown.TotalLandedCostVnd;
+        existing.VietnamRetailVnd = req.VnRetailPriceVnd;
+        existing.PriceDifferenceVnd = req.VnRetailPriceVnd - breakdown.TotalLandedCostVnd;
         existing.CalculatedAt = DateTime.UtcNow;
         existing.UpdatedAt = DateTime.UtcNow;
         db.OpportunityScores.Update(existing);
@@ -186,14 +185,14 @@ app.MapPost("/api/scores", async (
     else
     {
         var entity = ScoringService.Domain.Entities.OpportunityScore.Create(
-            cmd.MatchId, profitMargin, cmd.DemandScore, cmd.CompetitionScore,
-            cmd.PriceStabilityScore, cmd.MatchConfidenceScore, composite,
-            breakdown.TotalLandedCostVnd, cmd.VnRetailPriceVnd);
+            req.MatchId, profitMargin, req.DemandScore, req.CompetitionScore,
+            req.PriceStabilityScore, req.MatchConfidenceScore, composite,
+            breakdown.TotalLandedCostVnd, req.VnRetailPriceVnd);
         await db.OpportunityScores.AddAsync(entity, ct);
     }
     await db.SaveChangesAsync(ct);
 
-    return Results.Created($"/api/scores/{cmd.MatchId}", new { MatchId = cmd.MatchId, CompositeScore = composite });
+    return Results.Created($"/api/scores/{req.MatchId}", new { MatchId = req.MatchId, CompositeScore = composite });
 })
 .Produces(StatusCodes.Status201Created)
 .Produces(StatusCodes.Status400BadRequest)

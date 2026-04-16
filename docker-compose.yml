@@ -1,5 +1,3 @@
-version: '3.9'
-
 services:
   # ─── Infrastructure ─────────────────────────────────────────────────────────
   mysql:
@@ -10,7 +8,7 @@ services:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
       MYSQL_DATABASE: cma_products
     ports:
-      - "3306:3306"
+      - "3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
@@ -54,8 +52,8 @@ services:
   # ─── API Services ──────────────────────────────────────────────────────────
   product-api:
     build:
-      context: ./src/Services/ProductService/ProductService.Api
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: src/Services/ProductService/ProductService.Api/Dockerfile
     container_name: cma-product-api
     restart: unless-stopped
     ports:
@@ -63,7 +61,6 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Server=mysql;Port=3306;Database=cma_products;User=root;Password=rootpassword;
-      - Redis__ConnectionString=redis:6379
       - RabbitMq__Host=rabbitmq
     healthcheck:
       test: ["CMD", "/app/healthcheck.sh"]
@@ -83,8 +80,8 @@ services:
 
   matching-api:
     build:
-      context: ./src/Services/MatchingService/MatchingService.Api
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: src/Services/MatchingService/MatchingService.Api/Dockerfile
     container_name: cma-matching-api
     restart: unless-stopped
     ports:
@@ -109,8 +106,8 @@ services:
 
   scoring-api:
     build:
-      context: ./src/Services/ScoringService/ScoringService.Api
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: src/Services/ScoringService/ScoringService.Api/Dockerfile
     container_name: cma-scoring-api
     restart: unless-stopped
     ports:
@@ -135,8 +132,8 @@ services:
 
   notification-api:
     build:
-      context: ./src/Services/NotificationService/NotificationService.Api
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: src/Services/NotificationService/NotificationService.Api/Dockerfile
     container_name: cma-notification-api
     restart: unless-stopped
     ports:
@@ -161,8 +158,8 @@ services:
 
   scraping-worker:
     build:
-      context: ./src/Services/ScrapingService/ScrapingService.Worker
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: src/Services/ScrapingService/ScrapingService.Worker/Dockerfile
     container_name: cma-scraping-worker
     restart: unless-stopped
     environment:
@@ -189,8 +186,8 @@ services:
   # ─── Gateway & Frontend ────────────────────────────────────────────────────
   gateway:
     build:
-      context: ./src/Apps/CMA.Gateway
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: src/Apps/CMA.Gateway/Dockerfile
     container_name: cma-gateway
     restart: unless-stopped
     ports:
@@ -213,8 +210,8 @@ services:
 
   frontend:
     build:
-      context: ./src/Apps/CMA.WebApp
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: src/Apps/CMA.WebApp/Dockerfile
     container_name: cma-frontend
     restart: unless-stopped
     ports:

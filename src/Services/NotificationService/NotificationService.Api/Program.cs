@@ -1,7 +1,9 @@
 using Common.Application.Extensions;
 using Common.Infrastructure.Configuration;
+using MassTransit;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using NotificationService.Infrastructure.Consumers;
 using NotificationService.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -36,6 +38,29 @@ builder.Services.AddHostedService<AlertThresholdEngine>();
 
 // P4-B09: Scheduled report worker
 builder.Services.AddHostedService<ScheduledReportWorker>();
+
+// P4-B07: Wire MassTransit consumer for OpportunityScoredEvent
+var rabbitMqHost = builder.Configuration["RabbitMq:Host"];
+if (!string.IsNullOrEmpty(rabbitMqHost))
+{
+    builder.Services.AddMassTransit(x =>
+    {
+        x.AddConsumer<OpportunityScoredConsumer>();
+        x.UsingRabbitMq((context, cfg) =>
+        {
+            cfg.Host(rabbitMqHost, hostConfig =>
+            {
+                hostConfig.Username(builder.Configuration["RabbitMq:Username"] ?? "guest");
+                hostConfig.Password(builder.Configuration["RabbitMq:Password"] ?? "guest");
+            });
+            cfg.ReceiveEndpoint("notification-service", e =>
+            {
+                e.ConfigureConsumer<OpportunityScoredConsumer>(context);
+                e.UseMessageRetry(r => r.Immediate(3));
+            });
+        });
+    });
+}
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
@@ -143,7 +168,7 @@ app.Run();
 public record GenerateReportRequest(
     string Title,
     string Format, // "pdf" | "csv"
-    IReadOnlyList<OpportunityRefDto> Opportunities,
+    List<OpportunityRefDto> Opportunities,
     DateTime PeriodFrom,
     DateTime PeriodTo,
     Guid? UserId = null

@@ -64,6 +64,29 @@ public record UpdateWeightsRequest(
 );
 
 /// <summary>
+/// Request body for POST /api/scores.
+/// Plain DTO (not MediatR.IRequest) so ASP.NET Core can deserialize JSON directly.
+/// The endpoint dispatches the MediatR command internally.
+/// </summary>
+public record CalculateScoreRequest(
+    Guid MatchId,
+    decimal UsPriceUsd,
+    decimal VnRetailPriceVnd,
+    decimal DemandScore,
+    decimal CompetitionScore,
+    decimal PriceStabilityScore,
+    decimal MatchConfidenceScore,
+    decimal ExchangeRate = 25000m,
+    decimal? ShippingCostUsd = null,
+    decimal? ImportDutyRatePct = null,
+    decimal? VatRatePct = null,
+    /// <summary>Manual landed cost override — bypasses calculator when set.</summary>
+    decimal? LandedCostOverrideVnd = null,
+    /// <summary>Override for the import duty rate.</summary>
+    decimal? ImportDutyOverridePct = null
+);
+
+/// <summary>
 /// P3: Request body for POST /api/scores/export/excel.
 /// Controls the title and row limit of the exported workbook.
 /// </summary>

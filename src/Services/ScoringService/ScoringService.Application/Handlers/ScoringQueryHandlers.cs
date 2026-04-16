@@ -32,7 +32,7 @@ public class GetOpportunitiesHandler : MediatR.IRequestHandler<GetOpportunitiesQ
 
         var dtos = items.Select(s => new OpportunityScoreDto(
             s.Id, s.MatchId, s.CompositeScore, s.ProfitMarginPct,
-            s.VietnamRetailVnd > 0 ? (s.PriceDifferenceVnd / s.LandedCostVnd) * 100m : 0,
+            s.LandedCostVnd != 0 ? (s.PriceDifferenceVnd / s.LandedCostVnd) * 100m : 0,
             s.DemandScore, s.CompetitionScore, s.PriceStabilityScore,
             s.MatchConfidenceScore, s.LandedCostVnd, s.VietnamRetailVnd,
             s.PriceDifferenceVnd, s.CalculatedAt
