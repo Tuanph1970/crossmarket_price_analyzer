@@ -2,6 +2,7 @@ using AuthService.Application.Commands;
 using AuthService.Application.DTOs;
 using AuthService.Application.Persistence;
 using AuthService.Domain.Entities;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 
 namespace AuthService.Application.Commands;
@@ -23,7 +24,7 @@ public sealed class AddToWatchlistHandler : IRequestHandler<AddToWatchlistComman
         await _db.WatchlistItems.AddAsync(item, ct);
         await _db.SaveChangesAsync(ct);
 
-        return ToDto(item);
+        return WatchlistDtoMappers.ToDto(item);
     }
 }
 
@@ -36,8 +37,8 @@ public sealed class RemoveFromWatchlistHandler : IRequestHandler<RemoveFromWatch
     public async Task<bool> Handle(RemoveFromWatchlistCommand cmd, CancellationToken ct)
     {
         var item = await _db.WatchlistItems
-            .FirstOrDefaultAsync(w => w.Id == cmd.ItemId && w.UserId == cmd.UserId, ct)
-            ?? return false;
+            .FirstOrDefaultAsync(w => w.Id == cmd.ItemId && w.UserId == cmd.UserId, ct);
+        if (item is null) return false;
 
         _db.WatchlistItems.Remove(item);
         await _db.SaveChangesAsync(ct);
@@ -64,7 +65,7 @@ public sealed class GetWatchlistHandler : IRequestHandler<GetWatchlistQuery, Pag
             .ToListAsync(ct);
 
         return new PagedResult<WatchlistItemDto>(
-            items.Select(ToDto).ToList(), total, cmd.Page, cmd.PageSize);
+            items.Select(WatchlistDtoMappers.ToDto).ToList(), total, cmd.Page, cmd.PageSize);
     }
 }
 
@@ -84,7 +85,7 @@ public sealed class CreateAlertThresholdHandler : IRequestHandler<CreateAlertThr
         await _db.AlertThresholds.AddAsync(threshold, ct);
         await _db.SaveChangesAsync(ct);
 
-        return ToDto(threshold);
+        return WatchlistDtoMappers.ToDto(threshold);
     }
 }
 
@@ -103,7 +104,7 @@ public sealed class UpdateAlertThresholdHandler : IRequestHandler<UpdateAlertThr
         threshold.UpdateThresholds(cmd.MinScore, cmd.MaxScore, cmd.MinMarginPct);
         await _db.SaveChangesAsync(ct);
 
-        return ToDto(threshold);
+        return WatchlistDtoMappers.ToDto(threshold);
     }
 }
 
@@ -116,8 +117,8 @@ public sealed class DeleteAlertThresholdHandler : IRequestHandler<DeleteAlertThr
     public async Task<bool> Handle(DeleteAlertThresholdCommand cmd, CancellationToken ct)
     {
         var threshold = await _db.AlertThresholds
-            .FirstOrDefaultAsync(a => a.Id == cmd.ThresholdId && a.UserId == cmd.UserId, ct)
-            ?? return false;
+            .FirstOrDefaultAsync(a => a.Id == cmd.ThresholdId && a.UserId == cmd.UserId, ct);
+        if (threshold is null) return false;
 
         threshold.Deactivate();
         await _db.SaveChangesAsync(ct);
@@ -138,15 +139,18 @@ public sealed class GetAlertThresholdsHandler : IRequestHandler<GetAlertThreshol
             .OrderByDescending(a => a.CreatedAt)
             .ToListAsync(ct);
 
-        return items.Select(ToDto).ToList();
+        return items.Select(WatchlistDtoMappers.ToDto).ToList();
     }
 }
 
-// ── DTO mappers ───────────────────────────────────────────────────────────────
+// ── DTO mappers ────────────────────────────────────────────────────────────────
 
-static WatchlistItemDto ToDto(WatchlistItem w) => new(
-    w.Id, w.ProductMatchId, w.UsProductName, w.VnProductName,
-    w.AlertAboveScore, w.AlertBelowScore, w.IsMuted, w.CreatedAt);
+public static class WatchlistDtoMappers
+{
+    public static WatchlistItemDto ToDto(WatchlistItem w) => new(
+        w.Id, w.ProductMatchId, w.UsProductName, w.VnProductName,
+        w.AlertAboveScore, w.AlertBelowScore, w.IsMuted, w.CreatedAt);
 
-static AlertThresholdDto ToDto(AlertThreshold a) => new(
-    a.Id, a.Name, a.MinScore, a.MaxScore, a.MinMarginPct, a.IsActive, a.CreatedAt);
+    public static AlertThresholdDto ToDto(AlertThreshold a) => new(
+        a.Id, a.Name, a.MinScore, a.MaxScore, a.MinMarginPct, a.IsActive, a.CreatedAt);
+}

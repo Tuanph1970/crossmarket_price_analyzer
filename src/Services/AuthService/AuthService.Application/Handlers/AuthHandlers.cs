@@ -2,6 +2,7 @@ using AuthService.Application.DTOs;
 using AuthService.Application.Persistence;
 using AuthService.Domain.Entities;
 using CrossMarket.SharedKernel;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 
 namespace AuthService.Application.Commands;
