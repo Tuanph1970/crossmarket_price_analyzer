@@ -17,10 +17,5 @@ public class MatchConfirmationConfiguration : IEntityTypeConfiguration<MatchConf
         builder.Property(p => p.UserId).HasColumnName("user_id").HasMaxLength(100).IsRequired();
         builder.Property(p => p.Action).HasColumnName("action").HasConversion<string>().HasMaxLength(20).IsRequired();
         builder.Property(p => p.Notes).HasColumnName("notes").HasColumnType("text");
-
-        builder.HasOne<ProductMatch>(p => null!)
-            .WithMany(m => m.Confirmations)
-            .HasForeignKey(p => p.MatchId)
-            .OnDelete(DeleteBehavior.Cascade);
     }
 }

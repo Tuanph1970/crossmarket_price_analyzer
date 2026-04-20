@@ -37,6 +37,10 @@ builder.Services.AddDbContext<ScoringDbContext>(options =>
 // Application services
 builder.Services.AddScoped<ScoringEngine>();
 builder.Services.AddScoped<LandedCostCalculator>();
+builder.Services.AddScoped<Common.Application.Interfaces.IScoringEngine>(sp =>
+    sp.GetRequiredService<ScoringEngine>());
+builder.Services.AddScoped<Common.Application.Interfaces.ILandedCostCalculator>(sp =>
+    sp.GetRequiredService<LandedCostCalculator>());
 
 // ── Phase 3 services ─────────────────────────────────────────────────────────
 builder.Services.AddHttpClient();                                      // IHttpClientFactory for PriceStabilityService
@@ -45,7 +49,7 @@ builder.Services.AddSingleton<IHsCodeClassifier, HsCodeClassifier>();
 builder.Services.AddSingleton<ITariffService, TariffService>();
 builder.Services.AddScoped<IPriceStabilityService, PriceStabilityService>();
 builder.Services.AddSingleton<IShippingService, ShippingService>();
-builder.Services.AddSingleton<IExcelExportService, ExcelExportService>();
+builder.Services.AddScoped<IExcelExportService, ExcelExportService>();
 
 // WebSocket background handler
 builder.Services.AddSingleton<IOpportunityWebSocketHandler, OpportunityWebSocketHandler>();

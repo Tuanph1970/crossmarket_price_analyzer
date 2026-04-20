@@ -1,3 +1,8 @@
+using Common.Application.Interfaces;
+using Microsoft.EntityFrameworkCore;
+using ScoringService.Application.Persistence;
+using ScoringService.Domain.Entities;
+
 namespace ScoringService.Application.Services;
 
 /// <summary>
@@ -11,24 +16,13 @@ namespace ScoringService.Application.Services;
 /// If <paramref name="importDutyOverridePct"/> is set, it replaces the default rate
 /// regardless of any lookup table.
 /// </summary>
-public class LandedCostCalculator
+public sealed class LandedCostCalculator : ILandedCostCalculator
 {
     // Vietnam default rates
     private const decimal DefaultImportDutyRatePct = 5.0m;  // Standard import duty %
     private const decimal DefaultVatRatePct = 10.0m;        // Vietnam standard VAT %
     private const decimal DefaultHandlingFeeUsd = 3.0m;     // Flat handling fee per shipment
     private const decimal DefaultExchangeRate = 25000m;     // Default USD→VND rate
-
-    public record LandedCostBreakdown(
-        decimal UsPurchasePriceUsd,
-        decimal UsPurchasePriceVnd,
-        decimal ShippingCostUsd,
-        decimal ShippingCostVnd,
-        decimal ImportDutyVnd,
-        decimal VatVnd,
-        decimal HandlingFeesVnd,
-        decimal TotalLandedCostVnd
-    );
 
     /// <summary>
     /// Calculate total landed cost in VND.
@@ -68,7 +62,7 @@ public class LandedCostCalculator
     ///   When set, overrides the duty rate for this calculation regardless of any lookup table.
     /// </param>
     /// </summary>
-    public LandedCostBreakdown CalculateBreakdown(
+    public ILandedCostCalculator.LandedCostBreakdown CalculateBreakdown(
         decimal usPriceUsd,
         decimal exchangeRateUsdToVnd,
         decimal shippingCostUsd,
@@ -81,7 +75,7 @@ public class LandedCostCalculator
         // P2-B06: manual override — return a synthetic breakdown
         if (landedCostOverride.HasValue)
         {
-            return new LandedCostBreakdown(
+            return new ILandedCostCalculator.LandedCostBreakdown(
                 UsPurchasePriceUsd: usPriceUsd,
                 UsPurchasePriceVnd: usPriceUsd * exchangeRateUsdToVnd,
                 ShippingCostUsd: shippingCostUsd,
@@ -115,7 +109,7 @@ public class LandedCostCalculator
         // Step 4: Total landed cost
         var total = cifValue + importDuty + vat + handlingVnd;
 
-        return new LandedCostBreakdown(
+        return new ILandedCostCalculator.LandedCostBreakdown(
             UsPurchasePriceUsd: usPriceUsd,
             UsPurchasePriceVnd: usdPriceVnd,
             ShippingCostUsd: shippingCostUsd,

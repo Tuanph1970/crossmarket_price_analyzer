@@ -9,7 +9,7 @@ namespace ScrapingService.Infrastructure.Services;
 /// </summary>
 public class ExchangeRateUpdateService
 {
-    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly IHttpClientFactoryWrapper _httpClientFactory;
     private readonly IRedisCacheService _cache;
     private readonly ILogger<ExchangeRateUpdateService> _logger;
 
@@ -18,7 +18,7 @@ public class ExchangeRateUpdateService
     private const decimal FallbackRate = 25000m; // 1 USD = 25,000 VND
 
     public ExchangeRateUpdateService(
-        IHttpClientFactory httpClientFactory,
+        IHttpClientFactoryWrapper httpClientFactory,
         IRedisCacheService cache,
         ILogger<ExchangeRateUpdateService> logger)
     {
@@ -86,9 +86,39 @@ public interface IRedisCacheService
 }
 
 /// <summary>
-/// HTTP client factory interface.
+/// HTTP client factory abstraction used internally by ScrapingService infrastructure.
 /// </summary>
-public interface IHttpClientFactory
+public interface IHttpClientFactoryWrapper
 {
     HttpClient CreateClient(string name);
+}
+
+/// <summary>
+/// Adapter wrapping System.Net.Http.IHttpClientFactory to implement the local abstraction.
+/// </summary>
+public sealed class HttpClientFactoryWrapper : IHttpClientFactoryWrapper
+{
+    private readonly System.Net.Http.IHttpClientFactory _factory;
+
+    public HttpClientFactoryWrapper(System.Net.Http.IHttpClientFactory factory)
+        => _factory = factory;
+
+    public HttpClient CreateClient(string name) => _factory.CreateClient(name);
+}
+
+/// <summary>
+/// Adapter wrapping Common.Application.Interfaces.ICacheService to implement the local interface.
+/// </summary>
+public sealed class RedisCacheServiceAdapter : IRedisCacheService
+{
+    private readonly Common.Application.Interfaces.ICacheService _cache;
+
+    public RedisCacheServiceAdapter(Common.Application.Interfaces.ICacheService cache)
+        => _cache = cache;
+
+    public async Task<string?> GetStringAsync(string key)
+        => await _cache.GetAsync<string>(key);
+
+    public async Task SetStringAsync(string key, string value, TimeSpan? expiry = null)
+        => await _cache.SetAsync(key, value, expiry);
 }

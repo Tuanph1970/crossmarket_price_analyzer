@@ -53,6 +53,9 @@ builder.Services.AddSingleton<IProductScraper, WalmartScraper>();
 builder.Services.AddSingleton<IProductScraper, CigarPageScraper>();
 
 // 4. Register services
+// Adapters: wire local IHttpClientFactory / IRedisCacheService to Common.Infrastructure implementations
+builder.Services.AddScoped<IHttpClientFactoryWrapper, HttpClientFactoryWrapper>();
+builder.Services.AddScoped<IRedisCacheService, RedisCacheServiceAdapter>();
 builder.Services.AddSingleton<ExchangeRateUpdateService>();
 
 // Rotating proxy service with health-check HttpClient

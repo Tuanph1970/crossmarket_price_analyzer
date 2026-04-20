@@ -15,7 +15,7 @@ public static class SerilogConfiguration
 
     public static IHostBuilder UseSerilogLogging(this IHostBuilder hostBuilder)
     {
-        return hostBuilder.UseSerilog((context, config) =>
+        return hostBuilder.UseSerilog((context, services, config) =>
         {
             var env = context.HostingEnvironment;
             var elkUri = context.Configuration["Elasticsearch:Uri"];
@@ -55,10 +55,5 @@ public static class SerilogConfiguration
                 }
             }
         });
-    }
-
-    public static IHostBuilder UseSerilogRequestLogging(this IHostBuilder hostBuilder)
-    {
-        return hostBuilder.UseSerilogRequestLogging();
     }
 }

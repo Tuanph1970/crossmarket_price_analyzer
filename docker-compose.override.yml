@@ -1,13 +1,11 @@
 version: '3.9'
-# Development overrides — skip image builds, use local code mounts
+# Development overrides — local builds for faster iteration (no volume mounts to avoid hiding built DLLs)
 
 services:
   product-api:
     build:
       context: .
       dockerfile: src/Services/ProductService/ProductService.Api/Dockerfile
-    volumes:
-      - ./src/Services/ProductService:/app
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
 
@@ -15,30 +13,23 @@ services:
     build:
       context: .
       dockerfile: src/Services/MatchingService/MatchingService.Api/Dockerfile
-    volumes:
-      - ./src/Services/MatchingService:/app
 
   scoring-api:
     build:
       context: .
       dockerfile: src/Services/ScoringService/ScoringService.Api/Dockerfile
-    volumes:
-      - ./src/Services/ScoringService:/app
 
   notification-api:
     build:
       context: .
       dockerfile: src/Services/NotificationService/NotificationService.Api/Dockerfile
-    volumes:
-      - ./src/Services/NotificationService:/app
 
   scraping-worker:
     build:
       context: .
       dockerfile: src/Services/ScrapingService/ScrapingService.Worker/Dockerfile
-    volumes:
-      - ./src/Services/ScrapingService:/app
 
   gateway:
-    volumes:
-      - ./src/Apps/CMA.Gateway:/app
+    build:
+      context: .
+      dockerfile: src/Apps/CMA.Gateway/Dockerfile

@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc.ApiExplorer;
 using Microsoft.EntityFrameworkCore;
 using ProductService.Application.Commands;
 using ProductService.Application.DTOs;
+using ProductService.Application.Persistence;
 using ProductService.Application.Services;
 using ProductService.Contracts.Persistence;
 using ProductService.Infrastructure.Persistence;
@@ -57,7 +58,13 @@ builder.Services.AddSingleton<IProductScraper, CigarPageScraper>();
 builder.Services.AddScoped<ScraperFactory>();
 builder.Services.AddScoped<IExchangeRateService, ExchangeRateService>();
 
-// 8. Register application services
+// 7b. Fallback stubs for cross-service dependencies (QuickLookupCommandHandler uses interfaces)
+builder.Services.AddScoped<IFuzzyMatchingService, Common.Infrastructure.Services.FallbackFuzzyMatchingService>();
+builder.Services.AddScoped<ILandedCostCalculator, Common.Infrastructure.Services.FallbackLandedCostCalculator>();
+builder.Services.AddScoped<IScoringEngine, Common.Infrastructure.Services.FallbackScoringEngine>();
+
+// 8. Register application services (including repository used by MediatR handlers)
+builder.Services.AddScoped<ProductRepository>();
 builder.Services.AddScoped<IProductService, ProductServiceImpl>();
 
 // 9. MediatR — register QuickLookupCommand handler

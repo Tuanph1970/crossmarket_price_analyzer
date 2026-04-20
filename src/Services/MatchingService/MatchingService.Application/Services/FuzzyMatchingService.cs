@@ -1,3 +1,4 @@
+using Common.Application.Interfaces;
 using Common.Domain.Enums;
 using Microsoft.Extensions.Logging;
 
@@ -7,7 +8,7 @@ namespace MatchingService.Application.Services;
 /// Provides fuzzy string matching for US ↔ Vietnam product pairing.
 /// Uses Levenshtein distance and TF-IDF cosine similarity.
 /// </summary>
-public class FuzzyMatchingService
+public sealed class FuzzyMatchingService : IFuzzyMatchingService
 {
     private readonly ILogger<FuzzyMatchingService> _logger;
 

@@ -6,6 +6,7 @@ using ProductService.Application.Commands;
 using ProductService.Application.DTOs;
 using ProductService.Application.Persistence;
 using ProductService.Application.Services;
+using ScoringService.Application.Services;
 
 namespace ProductService.Application.Handlers;
 
@@ -13,27 +14,27 @@ namespace ProductService.Application.Handlers;
 /// Handles QuickLookupCommand: URL → scrape → fuzzy-match VN products → score.
 /// Uses local services directly (no cross-service HTTP calls):
 ///   - IProductScraper (via IScraperFactory)
-///   - FuzzyMatchingService
-///   - ScoringEngine + LandedCostCalculator
+///   - IFuzzyMatchingService
+///   - IScoringEngine + ILandedCostCalculator
 ///   - IExchangeRateService
 /// </summary>
-public class QuickLookupCommandHandler
+public sealed class QuickLookupCommandHandler
     : MediatR.IRequestHandler<QuickLookupCommand, QuickLookupResultDto>
 {
     private readonly IProductService _productService;
     private readonly IEnumerable<IProductScraper> _scrapers;
-    private readonly MatchingService.Application.Services.FuzzyMatchingService _fuzzyService;
-    private readonly ScoringService.Application.Services.ScoringEngine _scoringEngine;
-    private readonly ScoringService.Application.Services.LandedCostCalculator _landedCostCalculator;
+    private readonly IFuzzyMatchingService _fuzzyService;
+    private readonly IScoringEngine _scoringEngine;
+    private readonly ILandedCostCalculator _landedCostCalculator;
     private readonly IExchangeRateService _exchangeRateService;
     private readonly ILogger<QuickLookupCommandHandler> _logger;
 
     public QuickLookupCommandHandler(
         IProductService productService,
         IEnumerable<IProductScraper> scrapers,
-        MatchingService.Application.Services.FuzzyMatchingService fuzzyService,
-        ScoringService.Application.Services.ScoringEngine scoringEngine,
-        ScoringService.Application.Services.LandedCostCalculator landedCostCalculator,
+        IFuzzyMatchingService fuzzyService,
+        IScoringEngine scoringEngine,
+        ILandedCostCalculator landedCostCalculator,
         IExchangeRateService exchangeRateService,
         ILogger<QuickLookupCommandHandler> logger)
     {

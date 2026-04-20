@@ -68,11 +68,7 @@ if [[ "$SKIP_BUILD" == "false" ]]; then
   info "Building Docker images..."
   echo
 
-  if [[ "$WITH_OBSERVABILITY" == "true" ]]; then
-    docker compose build --parallel
-  else
-    docker compose build --parallel --exclude-scopes observability
-  fi
+  docker compose build --parallel
 
   success "All images built successfully."
 else

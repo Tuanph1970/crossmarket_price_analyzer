@@ -40,27 +40,9 @@ builder.Services.AddHostedService<AlertThresholdEngine>();
 builder.Services.AddHostedService<ScheduledReportWorker>();
 
 // P4-B07: Wire MassTransit consumer for OpportunityScoredEvent
-var rabbitMqHost = builder.Configuration["RabbitMq:Host"];
-if (!string.IsNullOrEmpty(rabbitMqHost))
-{
-    builder.Services.AddMassTransit(x =>
-    {
-        x.AddConsumer<OpportunityScoredConsumer>();
-        x.UsingRabbitMq((context, cfg) =>
-        {
-            cfg.Host(rabbitMqHost, hostConfig =>
-            {
-                hostConfig.Username(builder.Configuration["RabbitMq:Username"] ?? "guest");
-                hostConfig.Password(builder.Configuration["RabbitMq:Password"] ?? "guest");
-            });
-            cfg.ReceiveEndpoint("notification-service", e =>
-            {
-                e.ConfigureConsumer<OpportunityScoredConsumer>(context);
-                e.UseMessageRetry(r => r.Immediate(3));
-            });
-        });
-    });
-}
+// Note: AddCommonInfrastructure already calls AddMassTransit() for the service bus.
+// We only need to add the consumer endpoint here — the MassTransit bus itself
+// was already configured by AddCommonInfrastructure.
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>

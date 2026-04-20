@@ -33,6 +33,8 @@ builder.Services.AddDbContext<MatchingDbContext>(options =>
 // Application services
 builder.Services.AddScoped<ProductMatchRepository>();
 builder.Services.AddScoped<FuzzyMatchingService>();
+builder.Services.AddScoped<Common.Application.Interfaces.IFuzzyMatchingService>(sp =>
+    sp.GetRequiredService<FuzzyMatchingService>());
 
 // MediatR
 builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssemblyContaining<CreateMatchCommand>());

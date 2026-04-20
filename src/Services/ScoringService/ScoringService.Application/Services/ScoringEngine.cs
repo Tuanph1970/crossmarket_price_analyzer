@@ -1,3 +1,4 @@
+using Common.Application.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using ScoringService.Application.Persistence;
 using ScoringService.Domain.Entities;
@@ -7,7 +8,7 @@ namespace ScoringService.Application.Services;
 /// <summary>
 /// Weighted multi-factor scoring engine for cross-border opportunities.
 /// </summary>
-public class ScoringEngine
+public sealed class ScoringEngine : IScoringEngine
 {
     public static readonly Dictionary<string, decimal> DefaultWeights = new()
     {

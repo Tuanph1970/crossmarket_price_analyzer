@@ -4,6 +4,7 @@ using Common.Infrastructure.Logging;
 using Common.Infrastructure.Messaging;
 using Common.Infrastructure.Messaging.Outbox;
 using Common.Infrastructure.Persistence;
+using Common.Infrastructure.Services;
 using Common.Infrastructure.Telemetry;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
@@ -21,19 +22,16 @@ public static class ConfigurationExtensions
         IConfiguration configuration,
         string serviceName)
     {
-        // Database — register BaseDbContext as open generic
-        services.AddDbContext<BaseDbContext>((sp, options) =>
-        {
-            var connectionString = configuration.GetConnectionString("DefaultConnection");
-            options.UseMySql(connectionString!, ServerVersion.AutoDetect(connectionString));
-        });
-
         // Redis
         var redisConnectionString = configuration["Redis:ConnectionString"];
         if (!string.IsNullOrEmpty(redisConnectionString))
         {
             services.AddSingleton<IConnectionMultiplexer>(
-                ConnectionMultiplexer.Connect(redisConnectionString));
+                ConnectionMultiplexer.Connect(new ConfigurationOptions
+                {
+                    EndPoints = { redisConnectionString },
+                    AbortOnConnectFail = false,
+                }));
             services.AddScoped<ICacheService, RedisCacheService>();
         }
 
@@ -62,10 +60,15 @@ public static class ConfigurationExtensions
             });
 
             services.AddScoped<IEventPublisher, RabbitMqEventPublisher>();
+        }
 
-            // Outbox pattern: repository + background processor
-            services.AddScoped<IOutboxRepository, OutboxRepository>();
-            services.AddHostedService<OutboxProcessor>();
+        // Exchange rate service — use real Redis-backed one if Redis is available,
+        // otherwise fall back to a static rate.
+        // Note: ProductService registers the real ExchangeRateService separately.
+        if (string.IsNullOrEmpty(redisConnectionString))
+        {
+            // Redis is not available → register fallback stub so consumers can still resolve IExchangeRateService
+            services.AddScoped<IExchangeRateService, FallbackExchangeRateService>();
         }
 
         // OpenTelemetry
@@ -76,8 +79,6 @@ public static class ConfigurationExtensions
 
     public static IHostBuilder UseCommonLogging(this IHostBuilder hostBuilder)
     {
-        return hostBuilder
-            .UseSerilogLogging()
-            .UseSerilogRequestLogging();
+        return hostBuilder.UseSerilogLogging();
     }
 }
