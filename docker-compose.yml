@@ -191,13 +191,11 @@ services:
       - Redis__ConnectionString=redis:6379
       - RabbitMq__Host=rabbitmq
     healthcheck:
-      test: ["CMD", "/app/healthcheck.sh"]
+      test: ["CMD-SHELL", "grep -q dotnet /proc/1/stat"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 15s
-    volumes:
-      - ./infrastructure/docker/healthcheck.sh:/app/healthcheck.sh:ro
     depends_on:
       mysql:
         condition: service_healthy
