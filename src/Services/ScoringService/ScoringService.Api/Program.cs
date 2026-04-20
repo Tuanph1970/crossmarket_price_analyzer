@@ -48,7 +48,7 @@ builder.Services.AddHttpClient("ProductService");                      // Produc
 builder.Services.AddSingleton<IHsCodeClassifier, HsCodeClassifier>();
 builder.Services.AddSingleton<ITariffService, TariffService>();
 builder.Services.AddScoped<IPriceStabilityService, PriceStabilityService>();
-builder.Services.AddSingleton<IShippingService, ShippingService>();
+builder.Services.AddScoped<IShippingService, ShippingService>();
 builder.Services.AddScoped<IExcelExportService, ExcelExportService>();
 
 // WebSocket background handler

@@ -8,7 +8,7 @@ services:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
       MYSQL_DATABASE: cma_products
     ports:
-      - "3307:3306"
+      - "3309:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
@@ -39,8 +39,8 @@ services:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "5673:5672"
+      - "15673:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
@@ -116,8 +116,9 @@ services:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Server=mysql;Port=3306;Database=cma_scoring;User=root;Password=rootpassword;
       - RabbitMq__Host=rabbitmq
+    # ScoringService exposes /api/scores/websocket/health instead of /health — use TCP check
     healthcheck:
-      test: ["CMD", "/app/healthcheck.sh"]
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && echo -e 'GET /api/scores/websocket/health HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && timeout 3 cat <&3 | grep -q '200'"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -156,6 +157,28 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  auth-api:
+    build:
+      context: .
+      dockerfile: src/Services/AuthService/AuthService.Api/Dockerfile
+    container_name: cma-auth-api
+    restart: unless-stopped
+    ports:
+      - "5005:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+    healthcheck:
+      test: ["CMD", "/app/healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    volumes:
+      - ./infrastructure/docker/healthcheck.sh:/app/healthcheck.sh:ro
+    depends_on:
+      mysql:
+        condition: service_healthy
+
   scraping-worker:
     build:
       context: .
@@ -191,7 +214,7 @@ services:
     container_name: cma-gateway
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "8081:8080"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
     healthcheck:
@@ -215,7 +238,7 @@ services:
     container_name: cma-frontend
     restart: unless-stopped
     ports:
-      - "3000:80"
+      - "3003:80"
     depends_on:
       - gateway
 
