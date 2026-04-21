@@ -167,6 +167,9 @@ services:
       - "5005:8080"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Server=mysql;Port=3306;Database=cma_auth;User=root;Password=rootpassword;
+      - Redis__ConnectionString=redis:6379
+      - RabbitMq__Host=rabbitmq
     healthcheck:
       test: ["CMD", "/app/healthcheck.sh"]
       interval: 30s
@@ -177,6 +180,10 @@ services:
       - ./infrastructure/docker/healthcheck.sh:/app/healthcheck.sh:ro
     depends_on:
       mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
 
   scraping-worker:
