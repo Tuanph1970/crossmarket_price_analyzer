@@ -3,6 +3,8 @@ WORKDIR /app
 COPY src/Apps/CMA.WebApp/package*.json ./
 RUN npm install
 COPY src/Apps/CMA.WebApp/ .
+ARG VITE_API_GATEWAY_URL=http://localhost:8080
+ENV VITE_API_GATEWAY_URL=$VITE_API_GATEWAY_URL
 RUN npm run build
 
 FROM nginx:alpine AS runner

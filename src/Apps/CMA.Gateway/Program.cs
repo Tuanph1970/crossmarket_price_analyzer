@@ -29,6 +29,8 @@ app.UseSwaggerUI();
 // Health endpoint
 app.MapHealthChecks("/health");
 
+app.UseWebSockets();
+
 // YARP routes all other requests
 app.MapReverseProxy();
 

@@ -73,6 +73,7 @@ app.UseSwagger();
 app.UseSwaggerUI();
 
 // WebSocket endpoint (/ws/opportunities — see WebSocketMiddleware)
+app.UseWebSockets();
 app.UseOpportunityWebSockets();
 
 // GET /api/scores — ranked opportunity scores
