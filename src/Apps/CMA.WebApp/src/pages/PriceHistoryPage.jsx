@@ -119,6 +119,19 @@ export default function PriceHistoryPage() {
 
   const handleExport = () => downloadCsv(snapshots, data?.productName ?? productId);
 
+  if (!productId) {
+    return (
+      <PageContainer>
+        <h1 className="text-2xl font-bold text-text-primary mb-6">{t('priceHistory.title', 'Price History')}</h1>
+        <EmptyState
+          icon={TrendingUp}
+          title={t('priceHistory.title', 'Price History')}
+          description="Select a product from the Dashboard or Categories to view its price history."
+        />
+      </PageContainer>
+    );
+  }
+
   return (
     <ErrorBoundary onReset={refetch}>
       <PageContainer>

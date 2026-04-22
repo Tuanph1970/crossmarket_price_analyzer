@@ -4,7 +4,9 @@
     "compare": "Compare",
     "categories": "Categories",
     "priceHistory": "Price History",
+    "history": "Price History",
     "quickLookup": "Quick Lookup",
+    "watchlist": "Watchlist",
     "alerts": "Alerts",
     "settings": "Settings"
   },

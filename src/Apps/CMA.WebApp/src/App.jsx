@@ -44,9 +44,11 @@ export default function App() {
 
             {/* Protected — auth required */}
             <Route path="/" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+            <Route path="/compare"            element={<ProtectedRoute><ComparisonPage /></ProtectedRoute>} />
             <Route path="/compare/:matchId"  element={<ProtectedRoute><ComparisonPage /></ProtectedRoute>} />
             <Route path="/categories"         element={<ProtectedRoute><CategoryPage /></ProtectedRoute>} />
             <Route path="/categories/:categoryId" element={<ProtectedRoute><CategoryPage /></ProtectedRoute>} />
+            <Route path="/history"             element={<ProtectedRoute><PriceHistoryPage /></ProtectedRoute>} />
             <Route path="/history/:productId" element={<ProtectedRoute><PriceHistoryPage /></ProtectedRoute>} />
             <Route path="/quick-lookup"       element={<ProtectedRoute><QuickLookupPage /></ProtectedRoute>} />
             <Route path="/alerts"            element={<ProtectedRoute><AlertsPage /></ProtectedRoute>} />
