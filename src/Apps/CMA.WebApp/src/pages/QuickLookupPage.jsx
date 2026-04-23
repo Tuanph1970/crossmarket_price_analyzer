@@ -77,7 +77,7 @@ export default function QuickLookupPage() {
 
   const lookupMutation = useQuickLookup({
     onError: (err) => {
-      setError(err?.response?.data?.message || t('quickLookup.error', 'Failed to analyze URL'));
+      setError(err?.response?.data?.message || err?.response?.data?.error || t('quickLookup.error', 'Failed to analyze URL'));
     },
   });
 

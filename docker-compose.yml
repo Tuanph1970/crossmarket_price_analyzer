@@ -170,6 +170,9 @@ services:
       - ConnectionStrings__DefaultConnection=Server=mysql;Port=3306;Database=cma_auth;User=root;Password=rootpassword;
       - Redis__ConnectionString=redis:6379
       - RabbitMq__Host=rabbitmq
+      - Jwt__SecretKey=CrossMarketAnalyzerJwtSecretKey2026SuperSecure256Bit!!
+      - Jwt__Issuer=CrossMarketAnalyzer
+      - Jwt__Audience=CrossMarketUsers
     healthcheck:
       test: ["CMD", "/app/healthcheck.sh"]
       interval: 30s

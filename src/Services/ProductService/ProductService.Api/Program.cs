@@ -193,12 +193,20 @@ app.MapPost("/api/products/quick-lookup", async (
     QuickLookupRequest req,
     CancellationToken ct) =>
 {
-    var result = await mediator.Send(
-        new QuickLookupCommand(req.Url, req.VnNameFilter, req.MaxVnMatches, req.MinMatchScore),
-        ct);
-    return Results.Ok(result);
+    try
+    {
+        var result = await mediator.Send(
+            new QuickLookupCommand(req.Url, req.VnNameFilter, req.MaxVnMatches, req.MinMatchScore),
+            ct);
+        return Results.Ok(result);
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(new { message = ex.Message });
+    }
 })
 .Produces<QuickLookupResultDto>(StatusCodes.Status200OK)
+.Produces(StatusCodes.Status400BadRequest)
 .WithTags("Products")
 .WithName("QuickLookup")
 .WithDescription("Scrapes a source URL and returns matching Vietnam products with scores.");

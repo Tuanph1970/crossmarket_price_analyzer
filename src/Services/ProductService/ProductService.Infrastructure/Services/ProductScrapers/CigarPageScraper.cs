@@ -23,18 +23,27 @@ public class CigarPageScraper : IProductScraper
         try
         {
             using var pw = await Playwright.CreateAsync();
-            var browser = await pw.Chromium.LaunchAsync(new() { Headless = true });
-            var page = await browser.NewPageAsync();
-            await page.GotoAsync(url, new() { WaitUntil = WaitUntilState.NetworkIdle });
+            var browser = await pw.Chromium.LaunchAsync(new()
+            {
+                Headless = true,
+                Args = new[] { "--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage" },
+            });
+            var context = await browser.NewContextAsync(new()
+            {
+                UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                ViewportSize = new ViewportSize { Width = 1920, Height = 1080 },
+            });
+            var page = await context.NewPageAsync();
+            await page.GotoAsync(url, new() { WaitUntil = WaitUntilState.DOMContentLoaded, Timeout = 30000 });
             await Task.Delay(2000, ct);
 
             var nameEl  = await page.QuerySelectorAsync("h1.product-title");
             var priceEl = await page.QuerySelectorAsync("span.price");
             var brandEl = await page.QuerySelectorAsync("span.product-brand");
 
-            var name      = nameEl  != null ? await nameEl.TextContentAsync() ?? "" : "";
-            var priceText = priceEl != null ? await priceEl.TextContentAsync() ?? "" : "";
-            var brand     = brandEl != null ? await brandEl.TextContentAsync() ?? "" : "";
+            var name      = nameEl  != null ? (await nameEl.TextContentAsync() ?? "").Trim() : "";
+            var priceText = priceEl != null ? (await priceEl.TextContentAsync() ?? "").Trim() : "";
+            var brand     = brandEl != null ? (await brandEl.TextContentAsync() ?? "").Trim() : "";
             await browser.CloseAsync();
 
             decimal price = 0;

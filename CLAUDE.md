@@ -89,7 +89,7 @@ infrastructure/docker/           # healthcheck.sh, Prometheus/Grafana configs
 | `ScoringService.Api` | 5003 | `cma_scoring` | Landed cost calculation, multi-factor scoring |
 | `NotificationService.Api` | 5004 | `cma_notifications` | Alerts, subscriptions, multi-channel delivery |
 | `ScrapingService.Worker` | — | `cma_scraping` | Background scheduled jobs (no HTTP API) |
-| `AuthService.Api` | — | — | Auth/identity — fully wired but **not deployed in docker-compose** |
+| `AuthService.Api` | 5005 | `cma_auth` | Auth/identity — JWT register/login/refresh, watchlist, alert thresholds |
 | `CMA.Gateway` | 8080 | — | YARP API Gateway — single entry point |
 | `CMA.WebApp` | 3000 | — | React SPA (static files via nginx in Docker) |
 
@@ -103,7 +103,7 @@ Inside containers all services listen on `8080`; `docker-compose.override.yml` m
 | `/api/matches` | matching-cluster | → MatchingService :5002 |
 | `/api/scores`, `/ws/opportunities` | scoring-cluster | → ScoringService :5003 |
 | `/api/alerts`, `/api/subscriptions` | notification-cluster | → NotificationService :5004 |
-| `/api/auth` | — | AuthService not routed in gateway (not in compose) |
+| `/api/auth`, `/api/watchlist`, `/api/alerts/thresholds` | auth-cluster | → AuthService :5005 |
 
 ### Layer Pattern (per service)
 
@@ -271,19 +271,11 @@ React SPA (:3000) → Gateway
 
 ## Important Conventions
 
-<<<<<<< HEAD
 - **No `.editorconfig`**: there is no `.editorconfig` file — code style follows default .NET conventions only
 - Each `Program.cs` wires its own DI: domain interfaces → infrastructure implementations
-- `ScrapingService.Worker` uses `Host.CreateApplicationBuilder` (Worker pattern); all other services use `WebApplication.CreateBuilder`
-- Frontend is in `src/Apps/CMA.WebApp` (React + Vite) but served as static files in Docker
-- Docker healthchecks use `infrastructure/docker/healthcheck.sh`
-- All services wait for MySQL, Redis, and RabbitMQ to be `service_healthy` before starting (configured in `docker-compose.yml`)
-- AuthService.Api is fully implemented but **not listed in docker-compose** — it exists but is not deployed in the current stack
-=======
-- Style is enforced by `.editorconfig` only — **`dotnet format` is not used**
-- Each `Program.cs` wires its own DI: domain interfaces → infrastructure implementations
-- `ScrapingService.Worker` uses `BackgroundService` + Quartz.NET — no HTTP API
+- `ScrapingService.Worker` uses `Host.CreateApplicationBuilder` (Worker pattern) + Quartz.NET — no HTTP API; all other services use `WebApplication.CreateBuilder`
 - Gateway routing is entirely config-driven (`appsettings.json` `ReverseProxy` section), not code
+- Frontend is in `src/Apps/CMA.WebApp` (React + Vite) but served as static files in Docker
 - Docker healthchecks use `infrastructure/docker/healthcheck.sh` — a simple HTTP probe curling `/health` on port 8080
 - All services wait for MySQL, Redis, and RabbitMQ to be `service_healthy` before starting (configured in `docker-compose.yml`)
 
