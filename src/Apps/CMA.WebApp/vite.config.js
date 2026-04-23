@@ -13,15 +13,27 @@ export default defineConfig({
     port: 3004,
     proxy: {
       '/api/products': {
-        target: 'http://product-api:8080',
+        target: 'http://localhost:5001',
         changeOrigin: true,
       },
       '/api/scores': {
-        target: 'http://scoring-api:8080',
+        target: 'http://localhost:5003',
         changeOrigin: true,
       },
       '/api/matches': {
-        target: 'http://matching-api:8080',
+        target: 'http://localhost:5002',
+        changeOrigin: true,
+      },
+      '/api/auth': {
+        target: 'http://localhost:5005',
+        changeOrigin: true,
+      },
+      '/api/watchlist': {
+        target: 'http://localhost:5005',
+        changeOrigin: true,
+      },
+      '/api/alerts': {
+        target: 'http://localhost:5005',
         changeOrigin: true,
       },
     },
