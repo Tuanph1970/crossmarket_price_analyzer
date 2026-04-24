@@ -49,6 +49,14 @@ builder.Services.AddHttpClient("ExchangeRate")
     .ConfigureHttpClient(c => c.Timeout = TimeSpan.FromSeconds(30))
     .AddCmaStandardResilienceHandler();
 
+// 5b. HTTP clients for cross-service persistence (after Quick Lookup)
+builder.Services.AddHttpClient("MatchingService")
+    .ConfigureHttpClient(c => c.BaseAddress = new Uri(
+        builder.Configuration["Services:MatchingServiceUrl"] ?? "http://matching-api:8080/"));
+builder.Services.AddHttpClient("ScoringService")
+    .ConfigureHttpClient(c => c.BaseAddress = new Uri(
+        builder.Configuration["Services:ScoringServiceUrl"] ?? "http://scoring-api:8080/"));
+
 // 6. Register scrapers (IProductScraper implementations)
 builder.Services.AddSingleton<IProductScraper, AmazonScraper>();
 builder.Services.AddSingleton<IProductScraper, WalmartScraper>();
@@ -211,6 +219,30 @@ app.MapPost("/api/products/quick-lookup", async (
 .WithName("QuickLookup")
 .WithDescription("Scrapes a source URL and returns matching Vietnam products with scores.");
 
+// POST /api/products/scrape-listing — listing page URL → extract product URLs → scrape each
+app.MapPost("/api/products/scrape-listing", async (
+    MediatR.IMediator mediator,
+    ScrapeListingRequest req,
+    CancellationToken ct) =>
+{
+    try
+    {
+        var result = await mediator.Send(
+            new ScrapeListingCommand(req.PageUrl, req.MaxProducts),
+            ct);
+        return Results.Ok(result);
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(new { message = ex.Message });
+    }
+})
+.Produces<ScrapeListingResultDto>(StatusCodes.Status200OK)
+.Produces(StatusCodes.Status400BadRequest)
+.WithTags("Products")
+.WithName("ScrapeListing")
+.WithDescription("Scrapes a category/listing page and returns all individual products found on it.");
+
 // Health check
 app.MapGet("/health", () => Results.Ok(new { Status = "Healthy", Service = "ProductService", Timestamp = DateTime.UtcNow }))
    .WithTags("Health")
@@ -303,4 +335,14 @@ public record QuickLookupRequest(
     string? VnNameFilter = null,
     int MaxVnMatches = 5,
     decimal MinMatchScore = 40m
+);
+
+/// <summary>
+/// Request to scrape all products from a category/listing page.
+/// </summary>
+/// <param name="PageUrl">Category or listing page URL (e.g. cigarpage.com/samplers/...).</param>
+/// <param name="MaxProducts">Maximum number of products to scrape (default: 15).</param>
+public record ScrapeListingRequest(
+    string PageUrl,
+    int MaxProducts = 15
 );

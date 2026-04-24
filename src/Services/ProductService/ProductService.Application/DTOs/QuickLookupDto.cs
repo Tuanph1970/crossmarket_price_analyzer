@@ -32,6 +32,13 @@ public record VnMatchDto(
     string MatchConfidenceLevel
 );
 
+public record ScrapeListingResultDto(
+    string PageUrl,
+    IReadOnlyList<ScrapedProductDto> Products,
+    int TotalFound,
+    DateTime ScrapedAt
+);
+
 public record ScoreBreakdownDto(
     Guid MatchId,
     decimal CompositeScore,

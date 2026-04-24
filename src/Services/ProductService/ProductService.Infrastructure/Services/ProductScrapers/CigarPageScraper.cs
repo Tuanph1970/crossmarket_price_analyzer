@@ -150,4 +150,65 @@ public class CigarPageScraper : IProductScraper
 
     public Task<IReadOnlyList<string>> GetProductUrlsAsync(int count, CancellationToken ct = default) =>
         Task.FromResult<IReadOnlyList<string>>(Array.Empty<string>());
+
+    public async Task<IReadOnlyList<string>> GetProductUrlsFromPageAsync(string pageUrl, int maxCount, CancellationToken ct = default)
+    {
+        var products = await ScrapeListingDirectAsync(pageUrl, maxCount, ct);
+        return products.Select(p => p.SourceUrl).ToList();
+    }
+
+    public async Task<IReadOnlyList<ScrapedProduct>> ScrapeListingDirectAsync(string pageUrl, int maxCount, CancellationToken ct = default)
+    {
+        _logger.LogInformation("CigarPage: fetching listing page {Url}", pageUrl);
+
+        var html = await FetchViaFlareSolverr(pageUrl, ct);
+        if (html is null)
+        {
+            _logger.LogWarning("CigarPage: FlareSolverr returned no content for listing {Url}", pageUrl);
+            return Array.Empty<ScrapedProduct>();
+        }
+
+        // Product URLs on a listing page live one level deeper than the category path.
+        // e.g. listing: /samplers/best-selling-cigar-samplers.html
+        //      product:  /samplers/best-selling-cigar-samplers/[slug].html
+        var categoryBase = new Uri(pageUrl).AbsolutePath
+            .TrimStart('/')
+            .Replace(".html", "", StringComparison.OrdinalIgnoreCase)
+            .TrimEnd('/') + "/";
+
+        // Parse product-name blocks: each has an <a href="URL" title="NAME"> followed by a price span
+        var productPattern = new Regex(
+            @"class=""product-name[^""]*"">\s*<a[^>]*href=""([^""]+)""[^>]*title=""([^""]+)"".*?class=""price"">\$?([\d,\.]+)",
+            RegexOptions.Singleline | RegexOptions.IgnoreCase);
+
+        var results = new List<ScrapedProduct>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (Match m in productPattern.Matches(html))
+        {
+            if (results.Count >= maxCount) break;
+
+            var url = m.Groups[1].Value;
+            var path = new Uri(url).AbsolutePath.TrimStart('/');
+
+            // Only accept URLs that are exactly one level under the category path
+            if (!path.StartsWith(categoryBase, StringComparison.OrdinalIgnoreCase)) continue;
+            var remainder = path[categoryBase.Length..];
+            if (remainder.Contains('/')) continue; // deeper nesting → skip
+
+            if (!seen.Add(url)) continue;
+
+            var name = System.Net.WebUtility.HtmlDecode(m.Groups[2].Value).Trim();
+            var priceStr = m.Groups[3].Value.Replace(",", "");
+            if (!decimal.TryParse(priceStr, System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out var price) || price == 0)
+                continue;
+
+            results.Add(new ScrapedProduct(name, null, null, price, "USD", 1m,
+                null, null, null, url, ProductSource.CigarPage));
+        }
+
+        _logger.LogInformation("CigarPage: extracted {Count} products directly from listing page", results.Count);
+        return results;
+    }
 }

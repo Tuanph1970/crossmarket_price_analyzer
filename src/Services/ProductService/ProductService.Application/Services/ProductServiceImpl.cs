@@ -98,12 +98,11 @@ public class ProductServiceImpl : IProductService
             await _repo.AddAsync(existing, ct);
         }
 
-        // Add price snapshot
+        // Add price snapshot via dedicated method (avoids concurrency exception on newly-added products)
         var snapshot = PriceSnapshot.Create(
             existing.Id, price, currency, quantityPerUnit,
             sellerName, sellerRating, salesVolume);
-        existing.PriceSnapshots.Add(snapshot);
-        await _repo.UpdateAsync(existing, ct);
+        await _repo.AddPriceSnapshotAsync(existing.Id, snapshot, ct);
 
         return ProductDtoMappers.ToDto(existing);
     }
