@@ -19,13 +19,11 @@ RUN dotnet build "src/Services/ProductService/ProductService.Api/ProductService.
 
 FROM build AS publish
 RUN dotnet publish "src/Services/ProductService/ProductService.Api/ProductService.Api.csproj" -c Release -o /app/publish /p:UseAppHost=false
-# Install Playwright CLI and download Chromium browser into the publish stage
 RUN dotnet tool install --global Microsoft.Playwright.CLI && \
     /root/.dotnet/tools/playwright install chromium
 
 FROM base AS final
 WORKDIR /app
-# Chromium runtime system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
     libdbus-1-3 libxcb1 libxkbcommon0 libx11-6 libxcomposite1 libxdamage1 \

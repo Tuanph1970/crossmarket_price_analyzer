@@ -1,233 +1,151 @@
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Common.Domain.Enums;
 using Common.Domain.Scraping;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using Microsoft.Playwright;
 
 namespace ProductService.Infrastructure.Services.ProductScrapers;
 
 public class CigarPageScraper : IProductScraper
 {
     private readonly ILogger<CigarPageScraper> _logger;
+    private readonly string _flareSolverrUrl;
+
     public ProductSource Source => ProductSource.CigarPage;
 
-    public CigarPageScraper(ILogger<CigarPageScraper> logger) { _logger = logger; }
+    public CigarPageScraper(ILogger<CigarPageScraper> logger, IConfiguration config)
+    {
+        _logger = logger;
+        _flareSolverrUrl = config["FlareSolverr:Url"] ?? "http://localhost:8191";
+    }
 
     public bool CanHandle(string url) =>
         url.Contains("cigarpage.com", StringComparison.OrdinalIgnoreCase);
 
     public async Task<ScrapedProduct?> ScrapeAsync(string url, CancellationToken ct = default)
     {
+        // Extract slug from URL → search query (e.g. "arturo-fuente-hemingway-best-seller" → "arturo fuente hemingway best seller")
+        var slug = ExtractSlug(url);
+        var query = slug.Replace('-', ' ');
+        var searchUrl = $"https://www.cigarpage.com/catalogsearch/result/?q={Uri.EscapeDataString(query)}";
+
+        _logger.LogInformation("CigarPage: searching for '{Query}' via FlareSolverr", query);
+
+        var html = await FetchViaFlareSolverr(searchUrl, ct);
+        if (html == null)
+        {
+            _logger.LogWarning("FlareSolverr returned no content for {Url}", searchUrl);
+            return null;
+        }
+
+        return ParseSearchResult(html, url, slug);
+    }
+
+    private ScrapedProduct? ParseSearchResult(string html, string originalUrl, string slug)
+    {
+        // Each product block: <span class="product-name defaultLink"><a href="URL" title="NAME">...</a></span>
+        // followed by: <span class="price">$XX.XX</span>  (the second price span, without style)
+        var productBlocks = Regex.Matches(html,
+            @"class=""product-name defaultLink"">.*?<a\s+href=""(?<url>https://www\.cigarpage\.com[^""]+)""\s+title=""(?<name>[^""]+)"">.*?class=""price""[^>]*>[^$<]*\$(?<price1>[\d,\.]+).*?class=""price"">[\s]*\$(?<price>[\d,\.]+)",
+            RegexOptions.Singleline | RegexOptions.IgnoreCase);
+
+        // Try to find the product whose URL matches the original URL (by slug)
+        foreach (Match m in productBlocks)
+        {
+            var productUrl = m.Groups["url"].Value;
+            if (!productUrl.Contains(slug, StringComparison.OrdinalIgnoreCase)) continue;
+
+            var name = System.Net.WebUtility.HtmlDecode(m.Groups["name"].Value).Trim();
+            var priceStr = m.Groups["price"].Value.Replace(",", "");
+            if (!decimal.TryParse(priceStr, System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out var price) || price == 0)
+                continue;
+
+            _logger.LogInformation("CigarPage search found: '{Name}' @ ${Price}", name, price);
+            return new ScrapedProduct(name, "", null, price, "USD", 1m,
+                null, null, null, originalUrl, ProductSource.CigarPage);
+        }
+
+        // Fallback: take first result if URL match failed
+        if (productBlocks.Count > 0)
+        {
+            var m = productBlocks[0];
+            var name = System.Net.WebUtility.HtmlDecode(m.Groups["name"].Value).Trim();
+            var priceStr = m.Groups["price"].Value.Replace(",", "");
+            if (decimal.TryParse(priceStr, System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out var price) && price > 0)
+            {
+                _logger.LogWarning("CigarPage: no exact URL match for {Slug}, using first result: '{Name}'", slug, name);
+                return new ScrapedProduct(name, "", null, price, "USD", 1m,
+                    null, null, null, originalUrl, ProductSource.CigarPage);
+            }
+        }
+
+        // Simpler fallback regex — match any product-name link + next price
+        var nameMatch = Regex.Match(html,
+            @"href=""(?<url>https://www\.cigarpage\.com[^""]*" + Regex.Escape(slug) + @"[^""]*)""\s+title=""(?<name>[^""]+)""",
+            RegexOptions.IgnoreCase);
+        if (nameMatch.Success)
+        {
+            // Find price after this position
+            var afterName = html[(nameMatch.Index + nameMatch.Length)..];
+            var priceMatch = Regex.Match(afterName, @"class=""price"">\s*\$([\d,\.]+)", RegexOptions.IgnoreCase);
+            if (priceMatch.Success)
+            {
+                var name = System.Net.WebUtility.HtmlDecode(nameMatch.Groups["name"].Value).Trim();
+                var priceStr = priceMatch.Groups[1].Value.Replace(",", "");
+                if (decimal.TryParse(priceStr, System.Globalization.NumberStyles.Any,
+                    System.Globalization.CultureInfo.InvariantCulture, out var price) && price > 0)
+                {
+                    _logger.LogInformation("CigarPage fallback found: '{Name}' @ ${Price}", name, price);
+                    return new ScrapedProduct(name, "", null, price, "USD", 1m,
+                        null, null, null, originalUrl, ProductSource.CigarPage);
+                }
+            }
+        }
+
+        _logger.LogWarning("CigarPage: could not extract product from search results for slug '{Slug}'", slug);
+        return null;
+    }
+
+    private static string ExtractSlug(string url)
+    {
+        // https://www.cigarpage.com/arturo-fuente-hemingway-best-seller.html → arturo-fuente-hemingway-best-seller
+        var path = new Uri(url).AbsolutePath.TrimStart('/');
+        return path.EndsWith(".html", StringComparison.OrdinalIgnoreCase)
+            ? path[..^5]
+            : path;
+    }
+
+    private async Task<string?> FetchViaFlareSolverr(string url, CancellationToken ct)
+    {
         try
         {
-            using var pw = await Playwright.CreateAsync();
-            var browser = await pw.Chromium.LaunchAsync(new()
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(90) };
+            var payload = new { cmd = "request.get", url, maxTimeout = 60000 };
+            var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+
+            var response = await http.PostAsync($"{_flareSolverrUrl}/v1", content, ct);
+            var body = await response.Content.ReadAsStringAsync(ct);
+
+            using var doc = JsonDocument.Parse(body);
+            var root = doc.RootElement;
+
+            if (!root.TryGetProperty("status", out var status) || status.GetString() != "ok")
             {
-                Headless = true,
-                Args = new[]
-                {
-                    "--no-sandbox",
-                    "--disable-setuid-sandbox",
-                    "--disable-dev-shm-usage",
-                    "--disable-blink-features=AutomationControlled",
-                    "--window-size=1920,1080",
-                },
-            });
-
-            var context = await browser.NewContextAsync(new()
-            {
-                UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-                ViewportSize = new ViewportSize { Width = 1920, Height = 1080 },
-                ExtraHTTPHeaders = new Dictionary<string, string>
-                {
-                    ["Accept-Language"] = "en-US,en;q=0.9",
-                    ["Accept"] = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-                },
-            });
-
-            await context.AddInitScriptAsync(@"
-                Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-                Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
-                Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
-                window.chrome = { runtime: {} };
-            ");
-
-            var page = await context.NewPageAsync();
-
-            // Use NetworkIdle + long timeout to survive Cloudflare JS challenge (~5s)
-            await page.GotoAsync(url, new() { WaitUntil = WaitUntilState.NetworkIdle, Timeout = 45000 });
-
-            // Wait for Cloudflare to redirect to the real page
-            await Task.Delay(5000, ct);
-
-            // Wait for actual product content (not the Cloudflare challenge)
-            try
-            {
-                await page.WaitForSelectorAsync(
-                    "h1, [itemprop='name'], .productView-title, [data-product-title]",
-                    new() { Timeout = 10000 });
-            }
-            catch { /* fall through and try anyway */ }
-
-            var html = await page.ContentAsync();
-            var pageTitle = await page.TitleAsync();
-
-            // If still on Cloudflare challenge, bail
-            if (pageTitle.Contains("Just a moment", StringComparison.OrdinalIgnoreCase) ||
-                pageTitle.Contains("Attention Required", StringComparison.OrdinalIgnoreCase))
-            {
-                _logger.LogWarning("CigarPage Cloudflare challenge not cleared for {Url}", url);
-                await browser.CloseAsync();
+                _logger.LogWarning("FlareSolverr error for {Url}: {Body}", url, body[..Math.Min(300, body.Length)]);
                 return null;
             }
 
-            // Try DOM selectors (BigCommerce layout)
-            string name = "", brand = "", priceText = "";
-
-            // Title selectors — BigCommerce uses these patterns
-            foreach (var sel in new[] {
-                "h1.productView-title", "[itemprop='name']", "h1[data-product-title]",
-                ".productView-title", "h1.product-title", "h1" })
-            {
-                var el = await page.QuerySelectorAsync(sel);
-                if (el == null) continue;
-                var text = (await el.TextContentAsync() ?? "").Trim();
-                if (!string.IsNullOrWhiteSpace(text)) { name = text; break; }
-            }
-
-            // Price selectors
-            foreach (var sel in new[] {
-                "[data-product-price]", ".price--main", ".productView-price--withoutTax",
-                "[itemprop='price']", "span.price", ".price" })
-            {
-                var el = await page.QuerySelectorAsync(sel);
-                if (el == null) continue;
-                var text = (await el.TextContentAsync() ?? "").Trim();
-                if (!string.IsNullOrWhiteSpace(text)) { priceText = text; break; }
-            }
-
-            // Brand selectors
-            foreach (var sel in new[] {
-                ".productView-brand a", "[itemprop='brand']", "span.product-brand", ".brand" })
-            {
-                var el = await page.QuerySelectorAsync(sel);
-                if (el == null) continue;
-                var text = (await el.TextContentAsync() ?? "").Trim();
-                if (!string.IsNullOrWhiteSpace(text)) { brand = text; break; }
-            }
-
-            // Fall back to JSON-LD / HTML parsing if DOM selectors miss
-            if (string.IsNullOrWhiteSpace(name)) name = ExtractNameFromHtml(html, pageTitle);
-            if (string.IsNullOrWhiteSpace(priceText))
-            {
-                var p = ExtractPriceFromHtml(html);
-                if (p > 0) priceText = p.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            }
-
-            await browser.CloseAsync();
-
-            decimal price = 0;
-            var clean = Regex.Replace(priceText, "[^0-9.]", "");
-            decimal.TryParse(clean, System.Globalization.NumberStyles.Any,
-                System.Globalization.CultureInfo.InvariantCulture, out price);
-
-            if (string.IsNullOrWhiteSpace(name) || price == 0)
-            {
-                _logger.LogWarning(
-                    "CigarPage scrape incomplete for {Url} — name='{Name}' price={Price} pageTitle={Title}",
-                    url, name, price, pageTitle);
-                return null;
-            }
-
-            return new ScrapedProduct(
-                name.Trim(), brand.Trim(), null, price, "USD", 1m,
-                null, null, null, url, ProductSource.CigarPage);
+            return root.GetProperty("solution").GetProperty("response").GetString();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "CigarPage scrape failed for {Url}", url);
+            _logger.LogError(ex, "FlareSolverr request failed for {Url}", url);
             return null;
         }
-    }
-
-    private static string ExtractNameFromHtml(string html, string pageTitle)
-    {
-        // JSON-LD
-        var ldMatch = Regex.Match(html,
-            @"<script[^>]+type=""application/ld\+json""[^>]*>(.*?)</script>",
-            RegexOptions.Singleline | RegexOptions.IgnoreCase);
-        if (ldMatch.Success)
-        {
-            try
-            {
-                using var doc = JsonDocument.Parse(ldMatch.Groups[1].Value);
-                if (doc.RootElement.TryGetProperty("name", out var n))
-                    return n.GetString() ?? "";
-            }
-            catch { }
-        }
-
-        // og:title
-        var ogMatch = Regex.Match(html,
-            @"<meta[^>]+property=""og:title""[^>]+content=""([^""]+)""",
-            RegexOptions.IgnoreCase);
-        if (ogMatch.Success) return System.Net.WebUtility.HtmlDecode(ogMatch.Groups[1].Value).Trim();
-
-        // Strip "| Cigar Page" suffix from page title
-        if (!string.IsNullOrWhiteSpace(pageTitle))
-        {
-            var sep = pageTitle.IndexOf(" | Cigar Page", StringComparison.OrdinalIgnoreCase);
-            if (sep < 0) sep = pageTitle.IndexOf(" | CigarPage", StringComparison.OrdinalIgnoreCase);
-            return sep > 0 ? pageTitle[..sep].Trim() : pageTitle.Trim();
-        }
-
-        return "";
-    }
-
-    private static decimal ExtractPriceFromHtml(string html)
-    {
-        // JSON-LD offers
-        var ldMatch = Regex.Match(html,
-            @"<script[^>]+type=""application/ld\+json""[^>]*>(.*?)</script>",
-            RegexOptions.Singleline | RegexOptions.IgnoreCase);
-        if (ldMatch.Success)
-        {
-            try
-            {
-                using var doc = JsonDocument.Parse(ldMatch.Groups[1].Value);
-                if (doc.RootElement.TryGetProperty("offers", out var offers))
-                {
-                    var o = offers.ValueKind == JsonValueKind.Array ? offers[0] : offers;
-                    if (o.TryGetProperty("price", out var p))
-                    {
-                        if (p.ValueKind == JsonValueKind.Number) return p.GetDecimal();
-                        if (decimal.TryParse(p.GetString(), System.Globalization.NumberStyles.Any,
-                            System.Globalization.CultureInfo.InvariantCulture, out var d))
-                            return d;
-                    }
-                }
-            }
-            catch { }
-        }
-
-        // og:price or meta price
-        var priceMatch = Regex.Match(html,
-            @"<meta[^>]+(?:property=""og:price:amount""|name=""price"")[^>]+content=""([\d.]+)""",
-            RegexOptions.IgnoreCase);
-        if (priceMatch.Success &&
-            decimal.TryParse(priceMatch.Groups[1].Value, System.Globalization.NumberStyles.Any,
-                System.Globalization.CultureInfo.InvariantCulture, out var mp))
-            return mp;
-
-        // data-product-price attribute
-        var dataMatch = Regex.Match(html, @"data-product-price[^>]*>([\d.]+)");
-        if (dataMatch.Success &&
-            decimal.TryParse(dataMatch.Groups[1].Value, System.Globalization.NumberStyles.Any,
-                System.Globalization.CultureInfo.InvariantCulture, out var dp))
-            return dp;
-
-        return 0;
     }
 
     public Task<IReadOnlyList<string>> GetProductUrlsAsync(int count, CancellationToken ct = default) =>
