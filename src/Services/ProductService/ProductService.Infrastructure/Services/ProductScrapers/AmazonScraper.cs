@@ -311,6 +311,155 @@ public class AmazonScraper : IProductScraper
         }
     }
 
+    public async Task<IReadOnlyList<ScrapedProduct>> ScrapeListingDirectAsync(string pageUrl, int maxCount, CancellationToken ct = default)
+    {
+        _logger.LogInformation("Amazon: scraping listing page {Url} via Playwright", pageUrl);
+        try
+        {
+            using var pw = await Playwright.CreateAsync();
+            var browser = await pw.Chromium.LaunchAsync(new()
+            {
+                Headless = true,
+                Args = new[]
+                {
+                    "--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage",
+                    "--disable-blink-features=AutomationControlled", "--window-size=1920,1080",
+                },
+            });
+
+            var context = await browser.NewContextAsync(new()
+            {
+                UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                ViewportSize = new ViewportSize { Width = 1920, Height = 1080 },
+                ExtraHTTPHeaders = new Dictionary<string, string> { ["Accept-Language"] = "en-US,en;q=0.9" },
+            });
+            await context.AddInitScriptAsync(@"
+                Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+                Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+                Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+                window.chrome = { runtime: {} };
+            ");
+
+            var page = await context.NewPageAsync();
+            await page.GotoAsync(pageUrl, new() { WaitUntil = WaitUntilState.DOMContentLoaded, Timeout = 45000 });
+            await Task.Delay(3000, ct); // allow JS-rendered cards to paint
+
+            var finalUrl = page.Url;
+            if (finalUrl.Contains("captcha", StringComparison.OrdinalIgnoreCase) ||
+                finalUrl.Contains("ap/signin", StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogWarning("Amazon blocked listing scrape (CAPTCHA/auth redirect) for {Url}", pageUrl);
+                await browser.CloseAsync();
+                return Array.Empty<ScrapedProduct>();
+            }
+
+            var html = await page.ContentAsync();
+            await browser.CloseAsync();
+
+            // Parse product data directly from raw HTML — DOM selectors are unreliable
+            // because Amazon rehydrates the page via React after DOMContentLoaded.
+            var results = ParseAmazonListingHtml(html, pageUrl, maxCount);
+            _logger.LogInformation("Amazon: extracted {Count} products from listing page", results.Count);
+            return results;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Amazon: listing scrape failed for {Url}", pageUrl);
+            return Array.Empty<ScrapedProduct>();
+        }
+    }
+
+    private List<ScrapedProduct> ParseAmazonListingHtml(string html, string pageUrl, int maxCount)
+    {
+        var results = new List<ScrapedProduct>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        // Each search-result card starts with data-asin="BXXXXXXXXXX" and data-index="N"
+        // Pattern: capture the card block between consecutive data-index occurrences
+        var cardPattern = new Regex(
+            @"data-asin=""(?<asin>[A-Z0-9]{10})""\s[^>]*data-index=""\d+""[^>]*>(?<block>.*?)(?=data-asin=""[A-Z0-9]{10}""\s[^>]*data-index=""|$)",
+            RegexOptions.Singleline | RegexOptions.IgnoreCase);
+
+        foreach (Match m in cardPattern.Matches(html))
+        {
+            if (results.Count >= maxCount) break;
+
+            var asin = m.Groups["asin"].Value;
+            if (!seen.Add(asin)) continue;
+
+            var block = m.Groups["block"].Value;
+
+            // Title: first meaningful span text after an <a> tag on a product link
+            var titleMatch = Regex.Match(block,
+                @"<a[^>]+/dp/" + asin + @"[^>]*>[^<]*<span[^>]*>([^<]{10,})</span>",
+                RegexOptions.IgnoreCase | RegexOptions.Singleline);
+            if (!titleMatch.Success)
+                titleMatch = Regex.Match(block,
+                    @"class=""a-size-(?:base-plus|medium)[^""]*""[^>]*>([^<]{10,})</span>",
+                    RegexOptions.IgnoreCase);
+            if (!titleMatch.Success)
+                titleMatch = Regex.Match(block,
+                    @"<h2[^>]*>.*?<span[^>]*>([^<]{10,})</span>",
+                    RegexOptions.IgnoreCase | RegexOptions.Singleline);
+
+            var title = titleMatch.Success
+                ? System.Net.WebUtility.HtmlDecode(titleMatch.Groups[1].Value).Trim()
+                : "";
+            if (string.IsNullOrWhiteSpace(title)) continue;
+
+            // Price: first $XX.XX pattern
+            var priceMatch = Regex.Match(block,
+                @"class=""a-offscreen"">\$?([\d,]+\.?\d*)</span>",
+                RegexOptions.IgnoreCase);
+            decimal price = 0;
+            if (priceMatch.Success)
+            {
+                var priceStr = priceMatch.Groups[1].Value.Replace(",", "");
+                decimal.TryParse(priceStr, System.Globalization.NumberStyles.Any,
+                    System.Globalization.CultureInfo.InvariantCulture, out price);
+            }
+
+            results.Add(new ScrapedProduct(
+                title, null, asin, price, "USD", 1m,
+                null, null, null, $"https://www.amazon.com/dp/{asin}", ProductSource.Amazon));
+        }
+
+        // Fallback: simpler pass — find all data-asin + nearby title/price
+        if (results.Count == 0)
+        {
+            var asinBlocks = Regex.Matches(html,
+                @"data-asin=""(?<asin>[A-Z0-9]{10})""[^>]*>(?<inner>[\s\S]{0,3000}?)</div>",
+                RegexOptions.IgnoreCase);
+
+            foreach (Match m in asinBlocks)
+            {
+                if (results.Count >= maxCount) break;
+                var asin = m.Groups["asin"].Value;
+                if (!seen.Add(asin)) continue;
+
+                var inner = m.Groups["inner"].Value;
+                var titleM = Regex.Match(inner, @">([A-Z][^<]{15,})<", RegexOptions.IgnoreCase);
+                var priceM = Regex.Match(inner, @"\$([\d,]+\.\d{2})", RegexOptions.IgnoreCase);
+
+                if (!titleM.Success) continue;
+                var title = System.Net.WebUtility.HtmlDecode(titleM.Groups[1].Value).Trim();
+                decimal price = 0;
+                if (priceM.Success)
+                {
+                    decimal.TryParse(priceM.Groups[1].Value.Replace(",", ""),
+                        System.Globalization.NumberStyles.Any,
+                        System.Globalization.CultureInfo.InvariantCulture, out price);
+                }
+
+                results.Add(new ScrapedProduct(
+                    title, null, asin, price, "USD", 1m,
+                    null, null, null, $"https://www.amazon.com/dp/{asin}", ProductSource.Amazon));
+            }
+        }
+
+        return results;
+    }
+
     public async Task<IReadOnlyList<string>> GetProductUrlsAsync(int count, CancellationToken ct = default)
     {
         var urls = new List<string>();

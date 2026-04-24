@@ -5,6 +5,7 @@ using Common.Domain.Enums;
 using Common.Domain.Scraping;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Playwright;
 
 namespace ProductService.Infrastructure.Services.ProductScrapers;
 
@@ -124,7 +125,7 @@ public class CigarPageScraper : IProductScraper
         try
         {
             using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(90) };
-            var payload = new { cmd = "request.get", url, maxTimeout = 60000 };
+            var payload = new { cmd = "request.get", url, maxTimeout = 120000 };
             var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 
             var response = await http.PostAsync($"{_flareSolverrUrl}/v1", content, ct);
@@ -162,12 +163,25 @@ public class CigarPageScraper : IProductScraper
         _logger.LogInformation("CigarPage: fetching listing page {Url}", pageUrl);
 
         var html = await FetchViaFlareSolverr(pageUrl, ct);
+
+        // FlareSolverr failed — fall back to Playwright stealth
         if (html is null)
         {
-            _logger.LogWarning("CigarPage: FlareSolverr returned no content for listing {Url}", pageUrl);
+            _logger.LogInformation("CigarPage: falling back to Playwright stealth for listing {Url}", pageUrl);
+            html = await FetchViaPlaywrightAsync(pageUrl, ct);
+        }
+
+        if (html is null)
+        {
+            _logger.LogWarning("CigarPage: all fetch strategies failed for listing {Url}", pageUrl);
             return Array.Empty<ScrapedProduct>();
         }
 
+        return ParseListingHtml(html, pageUrl, maxCount);
+    }
+
+    private IReadOnlyList<ScrapedProduct> ParseListingHtml(string html, string pageUrl, int maxCount)
+    {
         // Product URLs on a listing page live one level deeper than the category path.
         // e.g. listing: /samplers/best-selling-cigar-samplers.html
         //      product:  /samplers/best-selling-cigar-samplers/[slug].html
@@ -194,7 +208,7 @@ public class CigarPageScraper : IProductScraper
             // Only accept URLs that are exactly one level under the category path
             if (!path.StartsWith(categoryBase, StringComparison.OrdinalIgnoreCase)) continue;
             var remainder = path[categoryBase.Length..];
-            if (remainder.Contains('/')) continue; // deeper nesting → skip
+            if (remainder.Contains('/')) continue;
 
             if (!seen.Add(url)) continue;
 
@@ -208,7 +222,55 @@ public class CigarPageScraper : IProductScraper
                 null, null, null, url, ProductSource.CigarPage));
         }
 
-        _logger.LogInformation("CigarPage: extracted {Count} products directly from listing page", results.Count);
+        _logger.LogInformation("CigarPage: extracted {Count} products from listing page", results.Count);
         return results;
+    }
+
+    private async Task<string?> FetchViaPlaywrightAsync(string url, CancellationToken ct)
+    {
+        try
+        {
+            using var pw = await Playwright.CreateAsync();
+            var browser = await pw.Chromium.LaunchAsync(new()
+            {
+                Headless = true,
+                Args = new[]
+                {
+                    "--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage",
+                    "--disable-blink-features=AutomationControlled", "--window-size=1920,1080",
+                },
+            });
+
+            var context = await browser.NewContextAsync(new()
+            {
+                UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                ViewportSize = new ViewportSize { Width = 1920, Height = 1080 },
+                ExtraHTTPHeaders = new Dictionary<string, string> { ["Accept-Language"] = "en-US,en;q=0.9" },
+            });
+            await context.AddInitScriptAsync(@"
+                Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+                Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+                Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+                window.chrome = { runtime: {} };
+            ");
+
+            var page = await context.NewPageAsync();
+            await page.GotoAsync(url, new() { WaitUntil = WaitUntilState.DOMContentLoaded, Timeout = 45000 });
+            await Task.Delay(3000, ct);
+
+            try { await page.WaitForSelectorAsync(".product-name", new() { Timeout = 10000 }); }
+            catch { }
+
+            var html = await page.ContentAsync();
+            _logger.LogInformation("CigarPage Playwright HTML snippet: {Snippet}",
+                html.Length > 500 ? html[..500] : html);
+            await browser.CloseAsync();
+            return html;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "CigarPage: Playwright fallback failed for {Url}", url);
+            return null;
+        }
     }
 }
