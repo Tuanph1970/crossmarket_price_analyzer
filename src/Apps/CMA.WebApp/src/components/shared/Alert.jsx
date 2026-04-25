@@ -1,7 +1,3 @@
-/**
- * P4-F01: Alert — dismissible inline alert / error / success / warning message.
- * Used in login / register forms and other pages.
- */
 import { X, AlertCircle, CheckCircle, Info, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -13,15 +9,12 @@ const ICONS = {
 };
 
 const STYLES = {
-  error:   'border-danger/30 bg-danger/5 text-danger',
-  success: 'border-success/30 bg-success/5 text-success',
-  info:    'border-primary/30  bg-primary/5  text-primary',
-  warning: 'border-yellow-400/30 bg-yellow-50 text-yellow-700',
+  error:   'border-danger/30  bg-danger/8   text-danger',
+  success: 'border-success/30 bg-success/8  text-success',
+  info:    'border-primary/30 bg-primary/8  text-primary',
+  warning: 'border-gold/30    bg-gold/8     text-gold',
 };
 
-/**
- * @param {{ message: string, type?: 'error'|'success'|'info'|'warning', onDismiss?, className? }} props
- */
 export function Alert({ message, type = 'error', onDismiss, className = '' }) {
   const Icon = ICONS[type] ?? Info;
 
@@ -29,7 +22,8 @@ export function Alert({ message, type = 'error', onDismiss, className = '' }) {
     <div
       className={cn(
         'flex items-start gap-3 rounded-lg border px-4 py-3 text-sm',
-        STYLES[type], className
+        STYLES[type],
+        className
       )}
       role="alert"
     >
@@ -38,7 +32,7 @@ export function Alert({ message, type = 'error', onDismiss, className = '' }) {
       {onDismiss && (
         <button
           onClick={onDismiss}
-          className="shrink-0 opacity-70 hover:opacity-100"
+          className="shrink-0 opacity-60 hover:opacity-100 transition-opacity"
           aria-label="Dismiss"
         >
           <X className="w-4 h-4" />

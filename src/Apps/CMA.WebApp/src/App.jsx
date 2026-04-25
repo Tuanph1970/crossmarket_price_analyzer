@@ -61,7 +61,7 @@ export default function App() {
           </Routes>
         </Suspense>
       </Layout>
-      <Toaster position="top-right" richColors />
+      <Toaster position="top-right" richColors theme="dark" />
     </BrowserRouter>
   );
 }

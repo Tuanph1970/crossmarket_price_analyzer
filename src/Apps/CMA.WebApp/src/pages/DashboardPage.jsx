@@ -86,7 +86,7 @@ export default function DashboardPage() {
       </a>
 
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-text-primary">{t('dashboard.title')}</h1>
+        <h1 className="font-display text-2xl font-bold text-text-primary">{t('dashboard.title')}</h1>
         {/* P3-F01: Real-time connection indicator */}
         <div
           className="flex items-center gap-1.5 text-sm text-text-muted"
@@ -130,18 +130,20 @@ export default function DashboardPage() {
       {/* P3-F04 & P3-F05: Charts — show only when there is data */}
       {items.length > 0 && (
         <div className="grid gap-6 lg:grid-cols-2 mb-8">
-          <div className="bg-bg-secondary border border-border rounded-lg p-4">
-            <h2 className="text-sm font-semibold text-text-primary mb-3">
+          <div className="bg-surface border border-border rounded-xl p-4">
+            <h2 className="text-xs font-medium text-text-muted uppercase tracking-widest mb-4">
               {t('dashboard.marginChart.title', 'Top 10 by Profit Margin')}
             </h2>
             <MarginBarChart scores={items} />
           </div>
-          <div className="bg-bg-secondary border border-border rounded-lg p-4">
-            <h2 className="text-sm font-semibold text-text-primary mb-3">
-              {t('dashboard.radarChart.title', 'Score Breakdown —')}{' '}
-              {selectedOpp
-                ? `#${selectedOpp.matchId?.slice(0, 8)}`
-                : t('dashboard.radarChart.select', 'select an opportunity below')}
+          <div className="bg-surface border border-border rounded-xl p-4">
+            <h2 className="text-xs font-medium text-text-muted uppercase tracking-widest mb-4">
+              {t('dashboard.radarChart.title', 'Score Breakdown')}{' '}
+              <span className="text-text-subtle normal-case tracking-normal ml-1">
+                {selectedOpp
+                  ? `— #${selectedOpp.matchId?.slice(0, 8)}`
+                  : t('dashboard.radarChart.select', '— select an opportunity below')}
+              </span>
             </h2>
             <ScoreRadarChart score={selectedOpp ?? items[0]} />
           </div>

@@ -2,7 +2,10 @@ import { cn } from '@/lib/utils';
 
 export function Card({ children, className = '', ...props }) {
   return (
-    <div className={cn('rounded-xl border border-gray-200 bg-surface shadow-sm', className)} {...props}>
+    <div
+      className={cn('rounded-xl border border-border bg-surface', className)}
+      {...props}
+    >
       {children}
     </div>
   );
@@ -10,7 +13,7 @@ export function Card({ children, className = '', ...props }) {
 
 export function CardHeader({ children, className = '', ...props }) {
   return (
-    <div className={cn('px-6 py-4 border-b border-gray-100', className)} {...props}>
+    <div className={cn('px-6 py-4 border-b border-border', className)} {...props}>
       {children}
     </div>
   );

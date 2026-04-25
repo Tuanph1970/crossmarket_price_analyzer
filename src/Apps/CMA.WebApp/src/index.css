@@ -3,22 +3,49 @@
 @tailwind utilities;
 
 :root {
-  --primary: #2563EB;
-  --success: #16A34A;
-  --warning: #D97706;
-  --danger: #DC2626;
-  --background: #F9FAFB;
-  --surface: #FFFFFF;
-  --text-primary: #111827;
-  --text-muted: #6B7280;
+  --primary: #06D6A0;
+  --success: #22C55E;
+  --warning: #F59E0B;
+  --danger:  #EF4444;
+  --gold:    #F5C518;
+  --background:    #080B10;
+  --surface:       #0E1117;
+  --surface-raised: #131820;
+  --border:        #1A2233;
+  --text-primary:  #E2E8F0;
+  --text-muted:    #8B9AB0;
+
+  /* Recharts + inline-style references */
+  --color-border:     #1A2233;
+  --color-text-muted: #8B9AB0;
+  --color-primary:    #06D6A0;
+  --color-bg:         #080B10;
+  --color-surface:    #0E1117;
 }
 
 body {
   @apply bg-background text-text-primary antialiased;
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: 'DM Sans', system-ui, sans-serif;
 }
 
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { @apply bg-gray-100; }
-::-webkit-scrollbar-thumb { @apply bg-gray-300 rounded-full; }
-*:focus-visible { @apply outline-2 outline-offset-2 outline-primary; }
+/* Scrollbar */
+::-webkit-scrollbar       { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: #080B10; }
+::-webkit-scrollbar-thumb { background: #1A2233; border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: #252E3E; }
+
+/* Focus ring */
+*:focus-visible {
+  outline: 2px solid rgba(6, 214, 160, 0.45);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Dark-mode native selects */
+select {
+  color-scheme: dark;
+}
+select option {
+  background-color: #131820;
+  color: #E2E8F0;
+}

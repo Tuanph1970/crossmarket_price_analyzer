@@ -4,15 +4,15 @@ export const SOURCE_LABELS = {
 };
 
 export const STATUS_COLORS = {
-  Pending:   'bg-yellow-100 text-yellow-800',
-  Confirmed: 'bg-green-100 text-green-800',
-  Rejected:  'bg-red-100 text-red-800',
+  Pending:   'bg-warning/15 text-warning   border border-warning/20',
+  Confirmed: 'bg-success/15 text-success   border border-success/20',
+  Rejected:  'bg-danger/15  text-danger    border border-danger/20',
 };
 
 export const CONFIDENCE_COLORS = {
-  High:   'bg-green-100 text-green-800',
-  Medium: 'bg-yellow-100 text-yellow-800',
-  Low:    'bg-red-100 text-red-800',
+  High:   'bg-primary/15 text-primary border border-primary/20',
+  Medium: 'bg-gold/15    text-gold    border border-gold/20',
+  Low:    'bg-danger/15  text-danger  border border-danger/20',
 };
 
 export const SCORING_WEIGHTS = {
