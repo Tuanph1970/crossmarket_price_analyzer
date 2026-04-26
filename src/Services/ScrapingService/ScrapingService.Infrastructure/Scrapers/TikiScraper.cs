@@ -1,161 +1,198 @@
-using System.Text.RegularExpressions;
+using System.Net.Http.Json;
+using System.Text.Json.Serialization;
 using Common.Domain.Enums;
 using Common.Domain.Scraping;
 using Microsoft.Extensions.Logging;
-using Microsoft.Playwright;
 
 namespace ScrapingService.Infrastructure.Scrapers;
 
 /// <summary>
-/// Tiki.vn product scraper using Microsoft Playwright.
-/// Falls back gracefully on any failure — logs warning and returns null.
+/// Tiki.vn scraper using the undocumented REST API — no auth required.
+/// API: https://tiki.vn/api/v2/products?q={keyword}&limit={n}
+///      https://tiki.vn/api/v2/products/{id}
 /// </summary>
 public class TikiScraper : IProductScraper
 {
+    private readonly HttpClient _http;
     private readonly ILogger<TikiScraper> _logger;
+
     public ProductSource Source => ProductSource.Tiki;
 
-    public TikiScraper(ILogger<TikiScraper> logger) => _logger = logger;
+    private static readonly string[] DefaultKeywords =
+    {
+        "xi ga", "cigar", "hop xi ga", "bo xi ga", "tau hut xi ga",
+        "hop dung xi ga", "bat lua cigar", "phu kien xi ga"
+    };
+
+    public TikiScraper(IHttpClientFactory httpClientFactory, ILogger<TikiScraper> logger)
+    {
+        _http = httpClientFactory.CreateClient("Tiki");
+        _logger = logger;
+    }
 
     public bool CanHandle(string url) =>
         url.Contains("tiki.vn", StringComparison.OrdinalIgnoreCase);
 
-    public async Task<ScrapedProduct?> ScrapeAsync(string url, CancellationToken ct = default)
+    // ── Public search method used by VnProductScrapingJob ──────────────────
+
+    public async Task<IReadOnlyList<ScrapedProduct>> SearchProductsAsync(
+        string keyword, int limit = 40, CancellationToken ct = default)
     {
-        IBrowser? browser = null;
         try
         {
-            var pw = await Playwright.CreateAsync();
-            browser = await pw.Chromium.LaunchAsync(new BrowserTypeLaunchOptions { Headless = true });
-            var page = await browser.NewPageAsync();
-
-            await page.GotoAsync(url, new PageGotoOptions { WaitUntil = WaitUntilState.NetworkIdle });
-            await Task.Delay(2000, ct); // allow JS to render dynamic content
-
-            // Name: .product-title (primary), h1.title (fallback)
-            string? name = null;
-            var nameEl = await page.QuerySelectorAsync(".product-title");
-            if (nameEl != null) name = await nameEl.TextContentAsync();
-            if (string.IsNullOrWhiteSpace(name))
+            var url = $"https://tiki.vn/api/v2/products?q={Uri.EscapeDataString(keyword)}&limit={limit}&sort=top_seller&version=home-persionalized";
+            var response = await _http.GetFromJsonAsync<TikiSearchResponse>(url, ct);
+            if (response?.Data == null || response.Data.Count == 0)
             {
-                var titleEl = await page.QuerySelectorAsync("h1.title");
-                name = titleEl != null ? await titleEl.TextContentAsync() : null;
+                _logger.LogInformation("Tiki search '{Keyword}': 0 results", keyword);
+                return Array.Empty<ScrapedProduct>();
             }
 
-            // Price: .product-price__current-price (current), .price-discount (fallback)
-            long priceVnd = 0;
-            var priceEl = await page.QuerySelectorAsync(".product-price__current-price")
-                         ?? await page.QuerySelectorAsync(".price-discount");
-            if (priceEl != null)
+            var results = response.Data
+                .Where(p => p.Price > 0 && !string.IsNullOrWhiteSpace(p.Name))
+                .Select(p => MapToScrapedProduct(p))
+                .ToList();
+
+            _logger.LogInformation("Tiki search '{Keyword}': {Count} products", keyword, results.Count);
+            return results;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Tiki search failed for keyword '{Keyword}'", keyword);
+            return Array.Empty<ScrapedProduct>();
+        }
+    }
+
+    // ── IProductScraper: scrape single product URL ──────────────────────────
+
+    public async Task<ScrapedProduct?> ScrapeAsync(string url, CancellationToken ct = default)
+    {
+        try
+        {
+            var productId = ExtractProductId(url);
+            if (productId == null)
             {
-                var priceText = await priceEl.TextContentAsync() ?? "";
-                var clean = Regex.Replace(priceText, "[^0-9]", "");
-                long.TryParse(clean, out priceVnd);
-            }
-
-            // Brand: .brand-link (primary), #brand (fallback)
-            string? brand = null;
-            var brandEl = await page.QuerySelectorAsync(".brand-link")
-                         ?? await page.QuerySelectorAsync("#brand");
-            if (brandEl != null) brand = await brandEl.TextContentAsync();
-
-            // Rating: .rating-review__stars — value in aria-label (e.g. "4.5 sao")
-            double? rating = null;
-            var ratingEl = await page.QuerySelectorAsync(".rating-review__stars");
-            if (ratingEl != null)
-            {
-                var ariaLabel = await ratingEl.GetAttributeAsync("aria-label") ?? "";
-                var match = Regex.Match(ariaLabel, @"([0-9.,]+)\s*sao");
-                if (match.Success && double.TryParse(match.Groups[1].Value, out var r))
-                    rating = r;
-            }
-
-            // Seller: .seller-info__name
-            string? seller = null;
-            var sellerEl = await page.QuerySelectorAsync(".seller-info__name");
-            if (sellerEl != null) seller = await sellerEl.TextContentAsync();
-
-            // External ID from URL path (e.g. /p/abc-123.html → abc-123)
-            string? externalId = null;
-            var segments = new Uri(url).AbsolutePath.Trim('/').Split('/');
-            if (segments.Length > 0)
-                externalId = segments[^1].Replace(".html", "");
-
-            await browser.CloseAsync();
-
-            if (string.IsNullOrWhiteSpace(name) || priceVnd == 0)
-            {
-                _logger.LogWarning("Tiki incomplete scrape result for {Url}", url);
+                _logger.LogWarning("Tiki: cannot extract product ID from {Url}", url);
                 return null;
             }
 
-            return new ScrapedProduct(
-                Name: name.Trim(),
-                Brand: string.IsNullOrWhiteSpace(brand) ? null : brand.Trim(),
-                Sku: externalId ?? "",
-                Price: priceVnd,
-                Currency: "VND",
-                QuantityPerUnit: 1m,
-                SellerName: seller?.Trim(),
-SellerRating: rating.HasValue ? (decimal?)rating.Value : null,
-                SalesVolume: null,
-                SourceUrl: url,
-                Source: ProductSource.Tiki
-            );
-        }
-        catch (OperationCanceledException)
-        {
-            _logger.LogWarning("Tiki scrape cancelled for {Url}", url);
-            return null;
+            var apiUrl = $"https://tiki.vn/api/v2/products/{productId}";
+            var p = await _http.GetFromJsonAsync<TikiProduct>(apiUrl, ct);
+            if (p == null || p.Price <= 0 || string.IsNullOrWhiteSpace(p.Name))
+            {
+                _logger.LogWarning("Tiki: incomplete product data for {Url}", url);
+                return null;
+            }
+
+            _logger.LogInformation("Tiki: scraped '{Name}' @ {Price:N0} VND", p.Name, p.Price);
+            return MapToScrapedProduct(p, url);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Tiki scrape failed for {Url}", url);
             return null;
         }
-        finally
-        {
-            if (browser != null)
-            {
-                try { await browser.CloseAsync(); }
-                catch { /* best-effort cleanup */ }
-            }
-        }
     }
+
+    // ── IProductScraper: scrape listing/search page ─────────────────────────
+
+    public async Task<IReadOnlyList<ScrapedProduct>> ScrapeListingDirectAsync(
+        string pageUrl, int maxCount, CancellationToken ct = default)
+    {
+        // Extract keyword from search URL e.g. https://tiki.vn/search?q=xi+ga
+        var keyword = ExtractSearchKeyword(pageUrl) ?? "xi ga";
+        _logger.LogInformation("Tiki listing: scraping '{Keyword}' (max {Max})", keyword, maxCount);
+        return await SearchProductsAsync(keyword, maxCount, ct);
+    }
+
+    // ── IProductScraper: collect product URLs for scheduled scraping ─────────
 
     public async Task<IReadOnlyList<string>> GetProductUrlsAsync(int count, CancellationToken ct = default)
     {
         var urls = new List<string>();
-        foreach (var keyword in new[] { "laptop", "smartphone", "vitamin" })
+        foreach (var kw in DefaultKeywords)
         {
             if (urls.Count >= count) break;
-            try
-            {
-                var pw = await Playwright.CreateAsync();
-                var browser = await pw.Chromium.LaunchAsync(new BrowserTypeLaunchOptions { Headless = true });
-                var page = await browser.NewPageAsync();
-
-                var searchUrl = $"https://tiki.vn/search?q={Uri.EscapeDataString(keyword)}";
-                await page.GotoAsync(searchUrl, new PageGotoOptions { WaitUntil = WaitUntilState.NetworkIdle });
-                await Task.Delay(2000, ct);
-
-                var links = await page.QuerySelectorAllAsync("a.product-item");
-                foreach (var link in links.Take(count - urls.Count))
-                {
-                    var href = await link.GetAttributeAsync("href") ?? "";
-                    if (!string.IsNullOrWhiteSpace(href))
-                    {
-                        var full = href.StartsWith("http") ? href : "https://tiki.vn" + href;
-                        if (!urls.Contains(full)) urls.Add(full);
-                    }
-                }
-                await browser.CloseAsync();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Tiki URL collection failed for keyword '{Keyword}'", keyword);
-            }
+            var products = await SearchProductsAsync(kw, Math.Min(20, count - urls.Count), ct);
+            urls.AddRange(products.Select(p => p.SourceUrl).Where(u => !urls.Contains(u)));
+            await Task.Delay(300, ct);
         }
-        return urls;
+        return urls.Take(count).ToList();
+    }
+
+    // ── Private helpers ─────────────────────────────────────────────────────
+
+    private static ScrapedProduct MapToScrapedProduct(TikiProduct p, string? overrideUrl = null)
+    {
+        var sourceUrl = overrideUrl
+            ?? (p.UrlPath != null
+                ? $"https://tiki.vn/{p.UrlPath}"
+                : $"https://tiki.vn/product/p{p.Id}.html");
+
+        return new ScrapedProduct(
+            Name: p.Name!.Trim(),
+            Brand: string.IsNullOrWhiteSpace(p.BrandName) ? null : p.BrandName.Trim(),
+            Sku: p.Sku ?? p.Id.ToString(),
+            Price: p.Price,
+            Currency: "VND",
+            QuantityPerUnit: 1m,
+            SellerName: p.SellerName?.Trim(),
+            SellerRating: p.RatingAverage > 0 ? (decimal?)p.RatingAverage : null,
+            SalesVolume: p.QuantitySold?.Value,
+            SourceUrl: sourceUrl,
+            Source: ProductSource.Tiki
+        );
+    }
+
+    private static long? ExtractProductId(string url)
+    {
+        // Matches: /p123456789.html or -p123456789.html
+        var match = System.Text.RegularExpressions.Regex.Match(
+            url, @"[/-]p(\d{6,12})(?:\.html)?", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        return match.Success && long.TryParse(match.Groups[1].Value, out var id) ? id : null;
+    }
+
+    private static string? ExtractSearchKeyword(string url)
+    {
+        try
+        {
+            var query = new Uri(url).Query.TrimStart('?');
+            foreach (var part in query.Split('&'))
+            {
+                var kv = part.Split('=', 2);
+                if (kv.Length == 2 && kv[0] == "q")
+                    return Uri.UnescapeDataString(kv[1].Replace('+', ' '));
+            }
+            return null;
+        }
+        catch { return null; }
+    }
+
+    // ── JSON models ─────────────────────────────────────────────────────────
+
+    private class TikiSearchResponse
+    {
+        [JsonPropertyName("data")] public List<TikiProduct>? Data { get; set; }
+    }
+
+    private class TikiProduct
+    {
+        [JsonPropertyName("id")]             public long Id            { get; set; }
+        [JsonPropertyName("sku")]            public string? Sku        { get; set; }
+        [JsonPropertyName("name")]           public string? Name       { get; set; }
+        [JsonPropertyName("url_key")]        public string? UrlKey     { get; set; }
+        [JsonPropertyName("url_path")]       public string? UrlPath    { get; set; }
+        [JsonPropertyName("price")]          public decimal Price      { get; set; }
+        [JsonPropertyName("original_price")] public decimal OriginalPrice { get; set; }
+        [JsonPropertyName("brand_name")]     public string? BrandName  { get; set; }
+        [JsonPropertyName("seller_name")]    public string? SellerName { get; set; }
+        [JsonPropertyName("rating_average")] public decimal RatingAverage { get; set; }
+        [JsonPropertyName("review_count")]   public int ReviewCount    { get; set; }
+        [JsonPropertyName("quantity_sold")]  public TikiQuantitySold? QuantitySold { get; set; }
+    }
+
+    private class TikiQuantitySold
+    {
+        [JsonPropertyName("value")] public int? Value { get; set; }
     }
 }

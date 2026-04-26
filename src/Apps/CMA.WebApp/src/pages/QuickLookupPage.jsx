@@ -14,10 +14,13 @@ function isListingPage(url) {
   try {
     const { hostname, pathname } = new URL(url);
     if (hostname.includes('cigarpage.com')) {
+      // Category/listing pages: /samplers.html (1 segment)
+      // Product pages: /samplers/product-name.html (2 segments)
       const segments = pathname.split('/').filter(Boolean);
-      return segments.length > 1;
+      return segments.length === 1;
     }
-    if (hostname.includes('amazon.com')) {
+    // Match any Amazon TLD: amazon.com, amazon.co.uk, amazon.de, etc.
+    if (/\bamazon\.[a-z]{2,3}(\.[a-z]{2})?/.test(hostname)) {
       if (pathname.includes('/dp/') || pathname.includes('/gp/product/')) return false;
       const segments = pathname.split('/').filter(Boolean);
       return segments.includes('s') || segments.includes('b') || segments.includes('zgbs');
@@ -243,9 +246,9 @@ export default function QuickLookupPage() {
     if (savedUrls.length === 0) return;
     setResults(Object.fromEntries(savedUrls.map(({ url }) => [url, { status: 'pending' }])));
 
-    for (const { url, type } of savedUrls) {
+    for (const { url } of savedUrls) {
       try {
-        if (type === 'listing') {
+        if (isListingPage(url)) {
           const res = await scrapeListingMutation.mutateAsync({ pageUrl: url, maxProducts: 20 });
           setResults((prev) => ({ ...prev, [url]: { status: 'success', result: res?.data ?? res ?? null } }));
         } else {
@@ -294,11 +297,11 @@ export default function QuickLookupPage() {
               {savedUrls.map((item) => (
                 <div key={item.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-surface-raised transition-colors">
                   <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 font-medium border ${
-                    item.type === 'listing'
+                    isListingPage(item.url)
                       ? 'bg-primary/15 text-primary border-primary/20'
                       : 'bg-gold/15 text-gold border-gold/20'
                   }`}>
-                    {item.type === 'listing' ? 'Listing' : 'Product'}
+                    {isListingPage(item.url) ? 'Listing' : 'Product'}
                   </span>
                   <span className="flex-1 text-xs text-text-muted truncate font-mono">{item.url}</span>
                   <button
@@ -329,7 +332,7 @@ export default function QuickLookupPage() {
             {savedUrls.map((item) => {
               const r = results[item.url];
               if (!r) return null;
-              return item.type === 'listing'
+              return isListingPage(item.url)
                 ? <ListingResult key={item.url} url={item.url} status={r.status} result={r.result} error={r.error} />
                 : <ProductLookupResult key={item.url} url={item.url} status={r.status} result={r.result} error={r.error} />;
             })}

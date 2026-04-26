@@ -124,8 +124,8 @@ public class CigarPageScraper : IProductScraper
     {
         try
         {
-            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(90) };
-            var payload = new { cmd = "request.get", url, maxTimeout = 120000 };
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(100) };
+            var payload = new { cmd = "request.get", url, maxTimeout = 90000 };
             var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 
             var response = await http.PostAsync($"{_flareSolverrUrl}/v1", content, ct);

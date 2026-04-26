@@ -1,8 +1,10 @@
 using System.Net;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Common.Domain.Enums;
 using Common.Domain.Scraping;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Playwright;
 
@@ -11,12 +13,82 @@ namespace ProductService.Infrastructure.Services.ProductScrapers;
 public class AmazonScraper : IProductScraper
 {
     private readonly ILogger<AmazonScraper> _logger;
+    private readonly string _flareSolverrUrl;
     public ProductSource Source => ProductSource.Amazon;
 
-    public AmazonScraper(ILogger<AmazonScraper> logger) { _logger = logger; }
+    public AmazonScraper(ILogger<AmazonScraper> logger, IConfiguration config)
+    {
+        _logger = logger;
+        _flareSolverrUrl = config["FlareSolverr:Url"] ?? "http://localhost:8191";
+    }
 
-    public bool CanHandle(string url) =>
-        url.Contains("amazon.com", StringComparison.OrdinalIgnoreCase);
+    public bool CanHandle(string url)
+    {
+        try
+        {
+            var host = new Uri(url).Host; // "www.amazon.co.uk", "www.amazon.com"
+            return host.Split('.').Any(p => p.Equals("amazon", StringComparison.OrdinalIgnoreCase));
+        }
+        catch { return false; }
+    }
+
+    private static string DetectCurrency(string pageUrl)
+    {
+        var host = new Uri(pageUrl).Host;
+        if (host.Contains("amazon.co.uk")) return "GBP";
+        if (host.Contains("amazon.de") || host.Contains("amazon.fr") ||
+            host.Contains("amazon.it") || host.Contains("amazon.es")) return "EUR";
+        if (host.Contains("amazon.co.jp")) return "JPY";
+        if (host.Contains("amazon.ca")) return "CAD";
+        return "USD";
+    }
+
+    // Detect currency from the HTML itself (Amazon localizes based on server IP)
+    private static string DetectCurrencyFromHtml(string html, string fallback)
+    {
+        var sample = Regex.Match(html, @"class=""a-offscreen"">([^<]{1,30})</span>", RegexOptions.IgnoreCase);
+        if (!sample.Success) return fallback;
+        var text = WebUtility.HtmlDecode(sample.Groups[1].Value).Trim();
+        if (text.StartsWith("VND", StringComparison.OrdinalIgnoreCase)) return "VND";
+        if (text.StartsWith("USD", StringComparison.OrdinalIgnoreCase) || text.Contains('$')) return "USD";
+        if (text.StartsWith("GBP", StringComparison.OrdinalIgnoreCase) || text.Contains('£')) return "GBP";
+        if (text.StartsWith("EUR", StringComparison.OrdinalIgnoreCase) || text.Contains('€')) return "EUR";
+        if (text.StartsWith("JPY", StringComparison.OrdinalIgnoreCase) || text.Contains('¥')) return "JPY";
+        if (text.StartsWith("CAD", StringComparison.OrdinalIgnoreCase)) return "CAD";
+        return fallback;
+    }
+
+    private static (decimal Price, string Currency) ParseOffscreenPrice(string rawSpanContent, string defaultCurrency)
+    {
+        var text = WebUtility.HtmlDecode(rawSpanContent).Trim();
+
+        // Detect currency from prefix
+        var curr = defaultCurrency;
+        if (text.StartsWith("VND", StringComparison.OrdinalIgnoreCase)) curr = "VND";
+        else if (text.StartsWith("USD", StringComparison.OrdinalIgnoreCase) || text.Contains('$')) curr = "USD";
+        else if (text.StartsWith("GBP", StringComparison.OrdinalIgnoreCase) || text.Contains('£')) curr = "GBP";
+        else if (text.StartsWith("EUR", StringComparison.OrdinalIgnoreCase) || text.Contains('€')) curr = "EUR";
+        else if (text.StartsWith("JPY", StringComparison.OrdinalIgnoreCase) || text.Contains('¥')) curr = "JPY";
+        else if (text.StartsWith("CAD", StringComparison.OrdinalIgnoreCase)) curr = "CAD";
+
+        // Strip all non-numeric except dots and commas, then remove commas
+        var numStr = Regex.Replace(text, @"[^\d.,]", "").Replace(",", "");
+        if (numStr.Count(c => c == '.') > 1)
+        {
+            // Multiple dots — keep only the last (likely decimal separator)
+            var last = numStr.LastIndexOf('.');
+            numStr = numStr[..last].Replace(".", "") + numStr[last..];
+        }
+        decimal.TryParse(numStr, System.Globalization.NumberStyles.Any,
+            System.Globalization.CultureInfo.InvariantCulture, out var price);
+        return (price, curr);
+    }
+
+    private static string AmazonBaseUrl(string pageUrl)
+    {
+        var uri = new Uri(pageUrl);
+        return $"{uri.Scheme}://{uri.Host}";
+    }
 
     public async Task<ScrapedProduct?> ScrapeAsync(string url, CancellationToken ct = default)
     {
@@ -313,7 +385,27 @@ public class AmazonScraper : IProductScraper
 
     public async Task<IReadOnlyList<ScrapedProduct>> ScrapeListingDirectAsync(string pageUrl, int maxCount, CancellationToken ct = default)
     {
-        _logger.LogInformation("Amazon: scraping listing page {Url} via Playwright", pageUrl);
+        _logger.LogInformation("Amazon: scraping listing page {Url}", pageUrl);
+
+        // Try FlareSolverr first to bypass Cloudflare/bot challenges
+        var html = await FetchViaFlareSolverr(pageUrl, ct);
+        if (html != null)
+        {
+            var flareResults = ParseAmazonListingHtml(html, pageUrl, maxCount);
+            if (flareResults.Count > 0)
+            {
+                _logger.LogInformation("Amazon: FlareSolverr extracted {Count} products", flareResults.Count);
+                return flareResults;
+            }
+            _logger.LogWarning("Amazon: FlareSolverr returned HTML but no products parsed, falling back to Playwright");
+        }
+
+        // Fallback: Playwright with stealth
+        return await ScrapeListingViaPlaywrightAsync(pageUrl, maxCount, ct);
+    }
+
+    private async Task<IReadOnlyList<ScrapedProduct>> ScrapeListingViaPlaywrightAsync(string pageUrl, int maxCount, CancellationToken ct)
+    {
         try
         {
             using var pw = await Playwright.CreateAsync();
@@ -342,7 +434,7 @@ public class AmazonScraper : IProductScraper
 
             var page = await context.NewPageAsync();
             await page.GotoAsync(pageUrl, new() { WaitUntil = WaitUntilState.DOMContentLoaded, Timeout = 45000 });
-            await Task.Delay(3000, ct); // allow JS-rendered cards to paint
+            await Task.Delay(3000, ct);
 
             var finalUrl = page.Url;
             if (finalUrl.Contains("captcha", StringComparison.OrdinalIgnoreCase) ||
@@ -356,10 +448,8 @@ public class AmazonScraper : IProductScraper
             var html = await page.ContentAsync();
             await browser.CloseAsync();
 
-            // Parse product data directly from raw HTML — DOM selectors are unreliable
-            // because Amazon rehydrates the page via React after DOMContentLoaded.
             var results = ParseAmazonListingHtml(html, pageUrl, maxCount);
-            _logger.LogInformation("Amazon: extracted {Count} products from listing page", results.Count);
+            _logger.LogInformation("Amazon: Playwright extracted {Count} products from listing page", results.Count);
             return results;
         }
         catch (Exception ex)
@@ -369,13 +459,44 @@ public class AmazonScraper : IProductScraper
         }
     }
 
+    private async Task<string?> FetchViaFlareSolverr(string url, CancellationToken ct)
+    {
+        try
+        {
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(100) };
+            var payload = new { cmd = "request.get", url, maxTimeout = 90000 };
+            var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+
+            var response = await http.PostAsync($"{_flareSolverrUrl}/v1", content, ct);
+            var body = await response.Content.ReadAsStringAsync(ct);
+
+            using var doc = JsonDocument.Parse(body);
+            var root = doc.RootElement;
+
+            if (!root.TryGetProperty("status", out var status) || status.GetString() != "ok")
+            {
+                _logger.LogWarning("Amazon FlareSolverr error for {Url}: {Body}", url, body[..Math.Min(300, body.Length)]);
+                return null;
+            }
+
+            return root.GetProperty("solution").GetProperty("response").GetString();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Amazon FlareSolverr request failed for {Url}", url);
+            return null;
+        }
+    }
+
     private List<ScrapedProduct> ParseAmazonListingHtml(string html, string pageUrl, int maxCount)
     {
         var results = new List<ScrapedProduct>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // Detect actual currency from the HTML (Amazon localizes by IP — may show VND for Vietnam servers)
+        var currency = DetectCurrencyFromHtml(html, DetectCurrency(pageUrl));
+        var baseUrl = AmazonBaseUrl(pageUrl);
 
         // Each search-result card starts with data-asin="BXXXXXXXXXX" and data-index="N"
-        // Pattern: capture the card block between consecutive data-index occurrences
         var cardPattern = new Regex(
             @"data-asin=""(?<asin>[A-Z0-9]{10})""\s[^>]*data-index=""\d+""[^>]*>(?<block>.*?)(?=data-asin=""[A-Z0-9]{10}""\s[^>]*data-index=""|$)",
             RegexOptions.Singleline | RegexOptions.IgnoreCase);
@@ -389,7 +510,6 @@ public class AmazonScraper : IProductScraper
 
             var block = m.Groups["block"].Value;
 
-            // Title: first meaningful span text after an <a> tag on a product link
             var titleMatch = Regex.Match(block,
                 @"<a[^>]+/dp/" + asin + @"[^>]*>[^<]*<span[^>]*>([^<]{10,})</span>",
                 RegexOptions.IgnoreCase | RegexOptions.Singleline);
@@ -403,28 +523,25 @@ public class AmazonScraper : IProductScraper
                     RegexOptions.IgnoreCase | RegexOptions.Singleline);
 
             var title = titleMatch.Success
-                ? System.Net.WebUtility.HtmlDecode(titleMatch.Groups[1].Value).Trim()
+                ? WebUtility.HtmlDecode(titleMatch.Groups[1].Value).Trim()
                 : "";
             if (string.IsNullOrWhiteSpace(title)) continue;
 
-            // Price: first $XX.XX pattern
+            // Capture the full a-offscreen span content and parse price + currency from it
             var priceMatch = Regex.Match(block,
-                @"class=""a-offscreen"">\$?([\d,]+\.?\d*)</span>",
+                @"class=""a-offscreen"">([^<]+)</span>",
                 RegexOptions.IgnoreCase);
             decimal price = 0;
+            var productCurrency = currency;
             if (priceMatch.Success)
-            {
-                var priceStr = priceMatch.Groups[1].Value.Replace(",", "");
-                decimal.TryParse(priceStr, System.Globalization.NumberStyles.Any,
-                    System.Globalization.CultureInfo.InvariantCulture, out price);
-            }
+                (price, productCurrency) = ParseOffscreenPrice(priceMatch.Groups[1].Value, currency);
 
             results.Add(new ScrapedProduct(
-                title, null, asin, price, "USD", 1m,
-                null, null, null, $"https://www.amazon.com/dp/{asin}", ProductSource.Amazon));
+                title, null, asin, price, productCurrency, 1m,
+                null, null, null, $"{baseUrl}/dp/{asin}", ProductSource.Amazon));
         }
 
-        // Fallback: simpler pass — find all data-asin + nearby title/price
+        // Fallback: simpler pass
         if (results.Count == 0)
         {
             var asinBlocks = Regex.Matches(html,
@@ -439,21 +556,18 @@ public class AmazonScraper : IProductScraper
 
                 var inner = m.Groups["inner"].Value;
                 var titleM = Regex.Match(inner, @">([A-Z][^<]{15,})<", RegexOptions.IgnoreCase);
-                var priceM = Regex.Match(inner, @"\$([\d,]+\.\d{2})", RegexOptions.IgnoreCase);
+                var priceM = Regex.Match(inner, @"class=""a-offscreen"">([^<]+)</span>", RegexOptions.IgnoreCase);
 
                 if (!titleM.Success) continue;
-                var title = System.Net.WebUtility.HtmlDecode(titleM.Groups[1].Value).Trim();
+                var title = WebUtility.HtmlDecode(titleM.Groups[1].Value).Trim();
                 decimal price = 0;
+                var productCurrency = currency;
                 if (priceM.Success)
-                {
-                    decimal.TryParse(priceM.Groups[1].Value.Replace(",", ""),
-                        System.Globalization.NumberStyles.Any,
-                        System.Globalization.CultureInfo.InvariantCulture, out price);
-                }
+                    (price, productCurrency) = ParseOffscreenPrice(priceM.Groups[1].Value, currency);
 
                 results.Add(new ScrapedProduct(
-                    title, null, asin, price, "USD", 1m,
-                    null, null, null, $"https://www.amazon.com/dp/{asin}", ProductSource.Amazon));
+                    title, null, asin, price, productCurrency, 1m,
+                    null, null, null, $"{baseUrl}/dp/{asin}", ProductSource.Amazon));
             }
         }
 

@@ -27,7 +27,7 @@ public sealed class ScrapeListingCommandHandler
     {
         var scraper = _scrapers.FirstOrDefault(s => s.CanHandle(cmd.PageUrl))
             ?? throw new InvalidOperationException(
-                $"No scraper registered for URL: {cmd.PageUrl}. Supported: cigarpage.com");
+                $"No scraper registered for URL: {cmd.PageUrl}. Supported: amazon.com, amazon.co.uk, cigarpage.com");
 
         // Single-fetch approach: parse all products directly from the listing page
         var products = await scraper.ScrapeListingDirectAsync(cmd.PageUrl, cmd.MaxProducts, ct);

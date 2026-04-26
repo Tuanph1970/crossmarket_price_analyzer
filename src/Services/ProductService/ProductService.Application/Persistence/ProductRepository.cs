@@ -76,6 +76,7 @@ public class ProductRepository
         var items = await query
             .Include(p => p.Brand)
             .Include(p => p.Category)
+            .Include(p => p.PriceSnapshots.OrderByDescending(s => s.ScrapedAt).Take(1))
             .OrderByDescending(p => p.CreatedAt)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
@@ -109,6 +110,15 @@ public class ProductRepository
             .Where(r => r.FromCurrency == from && r.ToCurrency == to)
             .OrderByDescending(r => r.FetchedAt)
             .FirstOrDefaultAsync(ct);
+    }
+
+    public async Task<Product?> FindBySourceUrlAsync(string sourceUrl, CancellationToken ct = default) =>
+        await _context.Products.FirstOrDefaultAsync(p => p.SourceUrl == sourceUrl, ct);
+
+    public async Task AddPriceSnapshotDirectAsync(PriceSnapshot snapshot, CancellationToken ct = default)
+    {
+        await _context.PriceSnapshots.AddAsync(snapshot, ct);
+        await _context.SaveChangesAsync(ct);
     }
 
     public async Task<Product> AddPriceSnapshotAsync(Guid productId, PriceSnapshot snapshot, CancellationToken ct = default)

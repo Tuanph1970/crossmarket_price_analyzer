@@ -1,23 +1,26 @@
 using System.Net.Http.Json;
+using Common.Domain.Scraping;
 using Microsoft.Extensions.Logging;
 using Quartz;
 using ScrapingService.Infrastructure.Scrapers;
 
 namespace ScrapingService.Worker.Jobs;
 
-/// <summary>
-/// Scrapes Vietnam product data from Shopee (via mock API client for MVP).
-/// Runs daily at 3am via Quartz.NET.
-/// Saves scraped products to the ProductService via HTTP API.
-/// </summary>
 [DisallowConcurrentExecution]
 public class VnProductScrapingJob : IJob
 {
     private readonly ShopeeApiClient _shopeeClient;
+    private readonly TikiScraper _tikiScraper;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<VnProductScrapingJob> _logger;
 
-    private static readonly string[] SearchKeywords =
+    private static readonly string[] TikiKeywords =
+    {
+        "xi ga", "cigar", "hop xi ga", "bo xi ga",
+        "tau hut xi ga", "phu kien xi ga", "bat lua cigar", "hop dung xi ga"
+    };
+
+    private static readonly string[] ShopeeKeywords =
     {
         "electronics", "vitamins", "coffee", "protein", "skincare",
         "tobacco", "cigars", "beauty", "supplements", "laptops"
@@ -25,10 +28,12 @@ public class VnProductScrapingJob : IJob
 
     public VnProductScrapingJob(
         ShopeeApiClient shopeeClient,
+        TikiScraper tikiScraper,
         IHttpClientFactory httpClientFactory,
         ILogger<VnProductScrapingJob> logger)
     {
         _shopeeClient = shopeeClient;
+        _tikiScraper = tikiScraper;
         _httpClientFactory = httpClientFactory;
         _logger = logger;
     }
@@ -36,83 +41,100 @@ public class VnProductScrapingJob : IJob
     public async Task Execute(IJobExecutionContext context)
     {
         var startedAt = DateTime.UtcNow;
-        _logger.LogInformation("[{Time}] VnProductScrapingJob started", startedAt);
+        _logger.LogInformation("VnProductScrapingJob started");
 
-        var totalScraped = 0;
+        var total = 0;
+        total += await ScrapeTikiAsync(context.CancellationToken);
+        total += await ScrapeShopeeAsync(context.CancellationToken);
 
-        foreach (var keyword in SearchKeywords)
+        _logger.LogInformation(
+            "VnProductScrapingJob completed: {Total} products in {Duration:F1}s",
+            total, (DateTime.UtcNow - startedAt).TotalSeconds);
+    }
+
+    private async Task<int> ScrapeTikiAsync(CancellationToken ct)
+    {
+        var saved = 0;
+        foreach (var keyword in TikiKeywords)
         {
-            if (context.CancellationToken.IsCancellationRequested) break;
-
+            if (ct.IsCancellationRequested) break;
             try
             {
-                _logger.LogInformation(
-                    "[{Time}] Searching Shopee for '{Keyword}'",
-                    DateTime.UtcNow, keyword);
-
-                var products = await _shopeeClient.SearchProductsAsync(
-                    keyword, 50, context.CancellationToken);
-
-                var successCount = 0;
-                foreach (var product in products)
+                var products = await _tikiScraper.SearchProductsAsync(keyword, 40, ct);
+                foreach (var p in products)
                 {
-                    if (context.CancellationToken.IsCancellationRequested) break;
-
-                    try
-                    {
-                        await SaveProductToApiAsync(product, context.CancellationToken);
-                        successCount++;
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Failed to save Shopee product {Name}", product.Name);
-                    }
+                    if (ct.IsCancellationRequested) break;
+                    try { await SaveProductAsync(p, ct); saved++; }
+                    catch (Exception ex) { _logger.LogWarning(ex, "Tiki save failed: {Name}", p.Name); }
                 }
-
-                totalScraped += successCount;
-                _logger.LogInformation(
-                    "[{Time}] Shopee '{Keyword}': {Count} products saved",
-                    DateTime.UtcNow, keyword, successCount);
-
-                // Rate limiting for API calls
-                await Task.Delay(500, context.CancellationToken);
+                _logger.LogInformation("Tiki '{Keyword}': {Count} products saved", keyword, products.Count);
+                await Task.Delay(400, ct);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "[{Time}] Error searching Shopee for '{Keyword}'",
-                    DateTime.UtcNow, keyword);
+                _logger.LogError(ex, "Tiki scrape error for '{Keyword}'", keyword);
             }
         }
-
-        _logger.LogInformation(
-            "[{Time}] VnProductScrapingJob completed: {Total} total products scraped in {Duration}s",
-            DateTime.UtcNow, totalScraped, (DateTime.UtcNow - startedAt).TotalSeconds);
+        return saved;
     }
 
-    private async Task SaveProductToApiAsync(ShopeeProduct product, CancellationToken ct)
+    private async Task<int> ScrapeShopeeAsync(CancellationToken ct)
+    {
+        var saved = 0;
+        foreach (var keyword in ShopeeKeywords)
+        {
+            if (ct.IsCancellationRequested) break;
+            try
+            {
+                var products = await _shopeeClient.SearchProductsAsync(keyword, 50, ct);
+                foreach (var product in products)
+                {
+                    if (ct.IsCancellationRequested) break;
+                    try
+                    {
+                        await SaveShopeeProductAsync(product, ct);
+                        saved++;
+                    }
+                    catch (Exception ex) { _logger.LogWarning(ex, "Shopee save failed: {Name}", product.Name); }
+                }
+                _logger.LogInformation("Shopee '{Keyword}': {Count} products saved", keyword, products.Count);
+                await Task.Delay(500, ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Shopee scrape error for '{Keyword}'", keyword);
+            }
+        }
+        return saved;
+    }
+
+    private async Task SaveProductAsync(ScrapedProduct p, CancellationToken ct)
     {
         var client = _httpClientFactory.CreateClient("ProductService");
         var payload = new
         {
-            name = product.Name,
-            brand = product.Brand,
-            sku = $"SHOPEE-{product.ItemId}",
-            price = product.PriceVnd,
-            currency = "VND",
-            quantityPerUnit = 1,
-            sellerName = product.SellerName,
-            sellerRating = product.Rating,
-            salesVolume = product.HistoricalSold,
-            sourceUrl = product.SourceUrl,
-            source = "Shopee"
+            name = p.Name, brand = p.Brand, sku = p.Sku,
+            price = p.Price, currency = p.Currency, quantityPerUnit = (int)p.QuantityPerUnit,
+            sellerName = p.SellerName, sellerRating = p.SellerRating, salesVolume = p.SalesVolume,
+            sourceUrl = p.SourceUrl, source = p.Source.ToString()
         };
+        var resp = await client.PostAsJsonAsync("/api/products/upsert-from-scrape", payload, ct);
+        if (!resp.IsSuccessStatusCode)
+            _logger.LogWarning("Save failed ({Status}) for {Name}", resp.StatusCode, p.Name);
+    }
 
-        var response = await client.PostAsJsonAsync("/api/products", payload, ct);
-        if (!response.IsSuccessStatusCode)
+    private async Task SaveShopeeProductAsync(ShopeeProduct product, CancellationToken ct)
+    {
+        var client = _httpClientFactory.CreateClient("ProductService");
+        var payload = new
         {
-            _logger.LogWarning(
-                "Failed to save Shopee product {Name}: {Status}",
-                product.Name, response.StatusCode);
-        }
+            name = product.Name, brand = product.Brand, sku = $"SHOPEE-{product.ItemId}",
+            price = product.PriceVnd, currency = "VND", quantityPerUnit = 1,
+            sellerName = product.SellerName, sellerRating = product.Rating,
+            salesVolume = product.HistoricalSold, sourceUrl = product.SourceUrl, source = "Shopee"
+        };
+        var resp = await client.PostAsJsonAsync("/api/products/upsert-from-scrape", payload, ct);
+        if (!resp.IsSuccessStatusCode)
+            _logger.LogWarning("Shopee save failed ({Status}) for {Name}", resp.StatusCode, product.Name);
     }
 }

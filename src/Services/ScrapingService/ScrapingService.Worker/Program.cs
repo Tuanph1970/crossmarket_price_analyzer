@@ -86,9 +86,25 @@ builder.Services.AddHttpClient<LazadaApiClient>("Lazada")
         opts.CircuitBreakerBreakDuration = TimeSpan.FromSeconds(30);
     });
 
-// P3-B01: Lazada API client (HTTP-based, like ShopeeApiClient)
-// P3-B02: Tiki scraper (Playwright-based, like Amazon/Walmart scrapers)
-builder.Services.AddSingleton<IProductScraper, TikiScraper>();
+builder.Services.AddHttpClient<TikiScraper>("Tiki")
+    .ConfigureHttpClient(c =>
+    {
+        c.Timeout = TimeSpan.FromSeconds(15);
+        c.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36");
+        c.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "application/json");
+    })
+    .AddCmaResilientHttpClient(opts =>
+    {
+        opts.MaxRetryAttempts = 2;
+        opts.BackoffType = BackoffStrategy.Exponential;
+        opts.CircuitBreakerFailureRatio = 0.5;
+        opts.CircuitBreakerMinimumThroughput = 5;
+        opts.CircuitBreakerBreakDuration = TimeSpan.FromSeconds(30);
+    });
+
+builder.Services.AddSingleton<IProductScraper>(sp =>
+    sp.GetRequiredService<TikiScraper>());
 
 // 5. Quartz.NET job scheduler
 builder.Services.AddQuartz(q =>

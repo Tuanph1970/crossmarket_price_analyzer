@@ -89,8 +89,7 @@ public class ProductServiceImpl : IProductService
         }
 
         // Find existing product by URL or create new
-        var all = await _repo.GetAllAsync(ct);
-        var existing = all.FirstOrDefault(p => p.SourceUrl == sourceUrl);
+        var existing = await _repo.FindBySourceUrlAsync(sourceUrl, ct);
 
         if (existing == null)
         {
@@ -98,11 +97,11 @@ public class ProductServiceImpl : IProductService
             await _repo.AddAsync(existing, ct);
         }
 
-        // Add price snapshot via dedicated method (avoids concurrency exception on newly-added products)
+        // Insert snapshot directly — avoids re-loading the tracked entity (prevents DbUpdateConcurrencyException)
         var snapshot = PriceSnapshot.Create(
             existing.Id, price, currency, quantityPerUnit,
             sellerName, sellerRating, salesVolume);
-        await _repo.AddPriceSnapshotAsync(existing.Id, snapshot, ct);
+        await _repo.AddPriceSnapshotDirectAsync(snapshot, ct);
 
         return ProductDtoMappers.ToDto(existing);
     }
