@@ -18,7 +18,9 @@ public sealed class AddToWatchlistHandler : IRequestHandler<AddToWatchlistComman
     public async Task<WatchlistItemDto> Handle(AddToWatchlistCommand cmd, CancellationToken ct)
     {
         var item = WatchlistItem.Create(
-            cmd.UserId, cmd.MatchId, cmd.UsProductName, cmd.VnProductName,
+            cmd.UserId, cmd.MatchId,
+            cmd.UsProductName ?? string.Empty,
+            cmd.VnProductName ?? string.Empty,
             cmd.AlertAboveScore, cmd.AlertBelowScore);
 
         await _db.WatchlistItems.AddAsync(item, ct);

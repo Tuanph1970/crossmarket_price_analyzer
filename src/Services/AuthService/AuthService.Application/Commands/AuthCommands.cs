@@ -23,8 +23,8 @@ public record RefreshTokenCommand(string RefreshToken) : IRequest<AuthResponse>;
 public record AddToWatchlistCommand(
     Guid UserId,
     Guid MatchId,
-    string UsProductName,
-    string VnProductName,
+    string? UsProductName,
+    string? VnProductName,
     decimal? AlertAboveScore = null,
     decimal? AlertBelowScore = null
 ) : IRequest<WatchlistItemDto>;

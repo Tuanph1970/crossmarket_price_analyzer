@@ -1,5 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
+import { useUiStore } from '@/store/uiStore';
 import { useTranslation } from 'react-i18next';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
@@ -97,9 +98,14 @@ function ChartSkeleton() {
 export default function PriceHistoryPage() {
   const { t } = useTranslation();
   const { productId } = useParams();
+  const setLastViewedProductId = useUiStore((s) => s.setLastViewedProductId);
   const [from, setFrom] = useState(DEFAULT_FROM);
   const [to, setTo] = useState(DEFAULT_TO);
   const [limit] = useState(30);
+
+  useEffect(() => {
+    if (productId) setLastViewedProductId(productId);
+  }, [productId, setLastViewedProductId]);
 
   const { data, isLoading, isError, refetch } = usePriceHistory(productId, { from, to, limit });
 

@@ -13,6 +13,9 @@ public sealed class DeliveryLog : Common.Domain.Entities.BaseEntity<Guid>
     public string? ErrorMessage { get; private set; }
     public DateTime SentAt { get; private set; }
     public Guid? MatchId { get; private set; }
+    public bool IsRead { get; private set; }
+
+    public void MarkRead() => IsRead = true;
 
     private DeliveryLog() { } // EF Core
 

@@ -72,6 +72,63 @@ app.MapGet("/health", () => Results.Ok(new { Status = "Healthy", Service = "Noti
    .WithName("HealthCheck")
    .WithDescription("Returns the health status of the NotificationService.");
 
+// ── Alerts (delivery log feed) ───────────────────────────────────────────────
+
+app.MapGet("/api/alerts", async (
+    [FromQuery] Guid userId,
+    [FromQuery] int page,
+    [FromQuery] int pageSize,
+    NotificationDbContext db,
+    CancellationToken ct) =>
+{
+    if (page < 1) page = 1;
+    if (pageSize < 1 || pageSize > 100) pageSize = 20;
+
+    var query = db.DeliveryLogs
+        .Where(d => d.UserId == userId && d.Success)
+        .OrderByDescending(d => d.SentAt);
+
+    var total = await query.CountAsync(ct);
+    var items = await query
+        .Skip((page - 1) * pageSize)
+        .Take(pageSize)
+        .Select(d => new AlertDto(d.Id, d.MessageContent, d.MatchId, d.SentAt, d.IsRead, d.Channel.ToString()))
+        .ToListAsync(ct);
+
+    return Results.Ok(new { items, total, page, pageSize });
+})
+.Produces(StatusCodes.Status200OK)
+.WithTags("Alerts")
+.WithName("GetAlerts");
+
+app.MapPut("/api/alerts/{id:guid}/read", async (
+    Guid id,
+    NotificationDbContext db,
+    CancellationToken ct) =>
+{
+    var log = await db.DeliveryLogs.FindAsync([id], ct);
+    if (log is null) return Results.NotFound();
+    log.MarkRead();
+    await db.SaveChangesAsync(ct);
+    return Results.NoContent();
+})
+.WithTags("Alerts")
+.WithName("MarkAlertRead");
+
+app.MapDelete("/api/alerts/{id:guid}", async (
+    Guid id,
+    NotificationDbContext db,
+    CancellationToken ct) =>
+{
+    var log = await db.DeliveryLogs.FindAsync([id], ct);
+    if (log is null) return Results.NotFound();
+    db.DeliveryLogs.Remove(log);
+    await db.SaveChangesAsync(ct);
+    return Results.NoContent();
+})
+.WithTags("Alerts")
+.WithName("DeleteAlert");
+
 // ── P4-B05: Email template preview ─────────────────────────────────────────
 app.MapGet("/api/notifications/email/preview", (
     string userName,
@@ -179,4 +236,13 @@ public record AlertDigestItemDto(
     string ProductName,
     decimal CompositeScore,
     decimal ProfitMarginPct
+);
+
+public record AlertDto(
+    Guid Id,
+    string Message,
+    Guid? MatchId,
+    DateTime SentAt,
+    bool IsRead,
+    string Channel
 );

@@ -4,7 +4,7 @@ import { LayoutDashboard, GitCompare, FolderOpen, LineChart, Search, Bell, Setti
 import { cn } from '@/lib/utils';
 import { useUiStore } from '@/store/uiStore';
 
-const navItems = [
+const BASE_NAV_ITEMS = [
   { to: '/',             icon: LayoutDashboard, labelKey: 'nav.dashboard' },
   { to: '/compare',      icon: GitCompare,      labelKey: 'nav.compare' },
   { to: '/categories',   icon: FolderOpen,      labelKey: 'nav.categories' },
@@ -17,7 +17,13 @@ const navItems = [
 
 export default function Sidebar() {
   const { t } = useTranslation();
-  const { sidebarOpen, setSidebarOpen } = useUiStore();
+  const { sidebarOpen, setSidebarOpen, lastViewedProductId } = useUiStore();
+
+  const navItems = BASE_NAV_ITEMS.map((item) =>
+    item.to === '/history' && lastViewedProductId
+      ? { ...item, to: `/history/${lastViewedProductId}` }
+      : item
+  );
 
   return (
     <aside className={cn(
