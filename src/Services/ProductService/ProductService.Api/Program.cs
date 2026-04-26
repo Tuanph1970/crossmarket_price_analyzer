@@ -10,6 +10,7 @@ using ProductService.Application.DTOs;
 using ProductService.Application.Persistence;
 using ProductService.Application.Services;
 using ProductService.Contracts.Persistence;
+using ProductService.Domain.Entities;
 using ProductService.Infrastructure.Persistence;
 using ProductService.Infrastructure.Services;
 using ProductService.Infrastructure.Services.ProductScrapers;
@@ -81,12 +82,12 @@ builder.Services.AddMediatR(cfg =>
 
 var app = builder.Build();
 
-// 6. Apply migrations on startup (development only)
-if (app.Environment.IsDevelopment())
+// Ensure DB schema exists and seed reference data on every startup
 {
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<ProductDbContext>();
     await db.Database.EnsureCreatedAsync();
+    await SeedCategoriesAsync(db);
 }
 
 // 7. Configure pipeline
@@ -243,6 +244,19 @@ app.MapPost("/api/products/scrape-listing", async (
 .WithName("ScrapeListing")
 .WithDescription("Scrapes a category/listing page and returns all individual products found on it.");
 
+// GET /api/categories — list all categories with product counts
+app.MapGet("/api/categories", async (
+    IProductService svc,
+    CancellationToken ct) =>
+{
+    var result = await svc.GetCategoriesAsync(ct);
+    return Results.Ok(result);
+})
+.Produces<IReadOnlyList<ProductService.Application.DTOs.CategoryDto>>(StatusCodes.Status200OK)
+.WithTags("Categories")
+.WithName("GetCategories")
+.WithDescription("Returns all product categories with active product counts.");
+
 // Health check
 app.MapGet("/health", () => Results.Ok(new { Status = "Healthy", Service = "ProductService", Timestamp = DateTime.UtcNow }))
    .WithTags("Health")
@@ -250,6 +264,28 @@ app.MapGet("/health", () => Results.Ok(new { Status = "Healthy", Service = "Prod
    .WithDescription("Returns the health status of the ProductService.");
 
 app.Run();
+
+static async Task SeedCategoriesAsync(ProductDbContext db)
+{
+    if (await db.Categories.AnyAsync()) return;
+
+    var categories = new[]
+    {
+        Category.Create("Electronics & Accessories", "8517"),
+        Category.Create("Cigars & Tobacco Products", "2402"),
+        Category.Create("Health & Personal Care", "3304"),
+        Category.Create("Clothing & Apparel", "6109"),
+        Category.Create("Vitamins & Supplements", "2106"),
+        Category.Create("Sports & Outdoors", "9506"),
+        Category.Create("Home & Garden", "9403"),
+        Category.Create("Toys & Games", "9503"),
+        Category.Create("Food & Beverages", "2009"),
+        Category.Create("Beauty & Cosmetics", "3307"),
+    };
+
+    await db.Categories.AddRangeAsync(categories);
+    await db.SaveChangesAsync();
+}
 
 /// <summary>
 /// Request to create a new product.

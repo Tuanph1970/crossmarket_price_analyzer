@@ -23,4 +23,5 @@ public interface IProductService
         decimal? sellerRating, int? salesVolume, string sourceUrl,
         Common.Domain.Enums.ProductSource source, string? hsCode, string? categoryName,
         CancellationToken ct);
+    Task<IReadOnlyList<CategoryDto>> GetCategoriesAsync(CancellationToken ct);
 }

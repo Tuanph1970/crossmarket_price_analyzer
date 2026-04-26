@@ -105,4 +105,7 @@ public class ProductServiceImpl : IProductService
 
         return ProductDtoMappers.ToDto(existing);
     }
+
+    public async Task<IReadOnlyList<CategoryDto>> GetCategoriesAsync(CancellationToken ct)
+        => await _repo.GetCategoriesWithStatsAsync(ct);
 }

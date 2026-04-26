@@ -9,6 +9,7 @@ const getStoredUrls = () => {
 export const productApi = {
   getProducts: (params) => api.get('/products', { params }),
   getProduct: (id) => api.get(`/products/${id}`),
+  getCategories: () => api.get('/categories'),
   getPriceHistory: (id, params) => api.get(`/products/${id}/price-history`, { params }),
   upsertFromScrape: (data) => api.post('/products/upsert-from-scrape', data),
   quickLookup: (data) => api.post('/products/quick-lookup', data, { timeout: 180_000 }),

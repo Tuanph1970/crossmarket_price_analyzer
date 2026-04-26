@@ -1,5 +1,6 @@
 using Common.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
+using ProductService.Application.DTOs;
 using ProductService.Contracts.Persistence;
 using ProductService.Domain.Entities;
 
@@ -141,6 +142,29 @@ public class ProductRepository
         await _context.Brands.AddAsync(brand, ct);
         await _context.SaveChangesAsync(ct);
         return brand;
+    }
+
+    public async Task<IReadOnlyList<CategoryDto>> GetCategoriesWithStatsAsync(CancellationToken ct = default)
+    {
+        var categories = await _context.Categories
+            .Include(c => c.ParentCategory)
+            .OrderBy(c => c.Name)
+            .ToListAsync(ct);
+
+        var counts = await _context.Products
+            .Where(p => p.IsActive && p.CategoryId != null)
+            .GroupBy(p => p.CategoryId)
+            .Select(g => new { CategoryId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.CategoryId!.Value, x => x.Count, ct);
+
+        return categories.Select(c => new CategoryDto(
+            c.Id,
+            c.Name,
+            c.HsCode,
+            c.ParentCategoryId,
+            c.ParentCategory?.Name,
+            counts.GetValueOrDefault(c.Id, 0)
+        )).ToList();
     }
 
     public async Task<Category?> GetOrCreateCategoryAsync(string name, string hsCode, CancellationToken ct = default)

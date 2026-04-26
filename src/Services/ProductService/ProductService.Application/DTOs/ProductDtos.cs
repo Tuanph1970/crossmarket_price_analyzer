@@ -67,3 +67,13 @@ public record ExchangeRateDto(
     decimal Rate,
     DateTime FetchedAt
 );
+
+// Categories
+public record CategoryDto(
+    Guid Id,
+    string Name,
+    string HsCode,
+    Guid? ParentCategoryId,
+    string? ParentCategoryName,
+    int ProductCount
+);
