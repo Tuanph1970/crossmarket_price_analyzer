@@ -10,6 +10,7 @@ namespace ScrapingService.Worker.Jobs;
 public class VnProductScrapingJob : IJob
 {
     private readonly ShopeeApiClient _shopeeClient;
+    private readonly LazadaApiClient _lazadaClient;
     private readonly TikiScraper _tikiScraper;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<VnProductScrapingJob> _logger;
@@ -26,13 +27,20 @@ public class VnProductScrapingJob : IJob
         "tobacco", "cigars", "beauty", "supplements", "laptops"
     };
 
+    private static readonly string[] LazadaKeywords =
+    {
+        "cigar", "xi ga", "tobacco", "hop xi ga", "phu kien xi ga"
+    };
+
     public VnProductScrapingJob(
         ShopeeApiClient shopeeClient,
+        LazadaApiClient lazadaClient,
         TikiScraper tikiScraper,
         IHttpClientFactory httpClientFactory,
         ILogger<VnProductScrapingJob> logger)
     {
         _shopeeClient = shopeeClient;
+        _lazadaClient = lazadaClient;
         _tikiScraper = tikiScraper;
         _httpClientFactory = httpClientFactory;
         _logger = logger;
@@ -41,11 +49,24 @@ public class VnProductScrapingJob : IJob
     public async Task Execute(IJobExecutionContext context)
     {
         var startedAt = DateTime.UtcNow;
-        _logger.LogInformation("VnProductScrapingJob started");
+        _logger.LogInformation("VnProductScrapingJob started — TEMP Lazada smoke test (no saves)");
 
+        // TEMP: Lazada-only smoke test until DOM-scraping path is confirmed.
+        // Tiki + Shopee + saves are skipped here so the test isolates Lazada cleanly.
         var total = 0;
-        total += await ScrapeTikiAsync(context.CancellationToken);
-        total += await ScrapeShopeeAsync(context.CancellationToken);
+        try
+        {
+            var products = await _lazadaClient.SearchProductsAsync("cigar", 20, context.CancellationToken);
+            _logger.LogInformation(
+                "Lazada SMOKE-TEST 'cigar' → {Count} products. First 3: {Sample}",
+                products.Count,
+                string.Join(" || ", products.Take(3).Select(p => $"{p.Name} @ {p.PriceVnd:N0} VND")));
+            total = products.Count;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Lazada scrape failed");
+        }
 
         _logger.LogInformation(
             "VnProductScrapingJob completed: {Total} products in {Duration:F1}s",

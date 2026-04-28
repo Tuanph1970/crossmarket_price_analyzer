@@ -24,9 +24,9 @@ public class TikiScraper : IProductScraper
         "hop dung xi ga", "bat lua cigar", "phu kien xi ga"
     };
 
-    public TikiScraper(IHttpClientFactory httpClientFactory, ILogger<TikiScraper> logger)
+    public TikiScraper(HttpClient http, ILogger<TikiScraper> logger)
     {
-        _http = httpClientFactory.CreateClient("Tiki");
+        _http = http;
         _logger = logger;
     }
 

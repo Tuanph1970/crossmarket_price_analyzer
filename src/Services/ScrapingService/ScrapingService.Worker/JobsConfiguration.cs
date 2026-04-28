@@ -22,12 +22,13 @@ public static class JobsConfiguration
             .WithIdentity("UsProductScrapingJob-trigger")
             .WithCronSchedule("0 0 2 * * ?"));
 
-        // VnProductScrapingJob — runs daily at 3am
+        // VnProductScrapingJob — TEMP: run once 60s after startup for Lazada smoke test
         quartz.AddJob<VnProductScrapingJob>(j => j.WithIdentity("VnProductScrapingJob"));
         quartz.AddTrigger(t => t
             .ForJob("VnProductScrapingJob")
             .WithIdentity("VnProductScrapingJob-trigger")
-            .WithCronSchedule("0 0 3 * * ?"));
+            .StartAt(DateTimeOffset.UtcNow.AddSeconds(60))
+            .WithSimpleSchedule(s => s.WithMisfireHandlingInstructionFireNow()));
 
         // ScoringJob — runs every 6 hours
         quartz.AddJob<ScoringJob>(j => j.WithIdentity("ScoringJob"));
