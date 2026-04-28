@@ -16,4 +16,13 @@ RUN dotnet publish "src/Services/ScrapingService/ScrapingService.Worker/Scraping
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
+
+# Install Chromium + system dependencies needed to launch headless Chrome.
+# Microsoft.Playwright.dll has no runtimeconfig of its own — borrow the Worker's.
+RUN dotnet exec \
+    --runtimeconfig /app/ScrapingService.Worker.runtimeconfig.json \
+    --depsfile /app/ScrapingService.Worker.deps.json \
+    /app/Microsoft.Playwright.dll install --with-deps chromium \
+    && rm -rf /var/lib/apt/lists/*
+
 ENTRYPOINT ["dotnet", "ScrapingService.Worker.dll"]
